@@ -6,11 +6,17 @@ import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.stickers.AddStickerToSet
 import org.telegram.telegrambots.meta.api.methods.stickers.CreateNewStickerSet
+import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
 import org.telegram.telegrambots.meta.api.objects.File
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.stickers.MaskPosition
+import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
+import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
+import java.lang.Exception
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Pattern
 
 class RomanTestFirstBot(private val config: Config, private val imageProvider: ImageProvider): TelegramLongPollingBot() {
 
@@ -20,6 +26,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         object Converter: SessionState()
         object Select : SessionState()
         class Creation(val name: String, val title: String): SessionState()
+        class Clone(val name: String, val title: String): SessionState()
         class AddSticker(val stickerPackName: String): SessionState()
         companion object {
             val DEFAULT = Converter
@@ -47,7 +54,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
                     message.hasSticker() -> processStickerMessage(message)
                     message.hasPhoto() -> processPhotoMessage(message)
                 }
-            } catch (ex: TelegramApiException) {
+            } catch (ex: Exception) {
                 logger.error(ex) { "Error handling $message" }
                 execute(SendMessage(chat.id, "Error: ${ex.message ?: "unknown error"}"))
             }
@@ -59,16 +66,32 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         val sticker = message.sticker
         val state = stateMap.getOrDefault(message.chatId, SessionState.DEFAULT)
 
-        if (state is SessionState.Select) {
-            stateMap[message.chatId] = SessionState.AddSticker(sticker.setName)
-            execute(SendMessage(message.chatId, "StickerPack ${sticker.setName} is chosen, send me photo you would like too to it"))
-        } else {
-            val fileId = sticker.fileId
-            val res = GetFile().setFileId(fileId)
-            val fileResponse = execute(res) as File
-            val image = downloadFile(fileResponse)
-            sendImage(state, image, message.chatId, sticker.emoji)
+        when (state) {
+            is SessionState.Select -> {
+                stateMap[message.chatId] = SessionState.AddSticker(sticker.setName)
+                execute(SendMessage(message.chatId, "StickerPack ${sticker.setName} is chosen, send me photo you would like too to it"))
+            }
+            is SessionState.Clone -> {
+                val stickerSetReq = GetStickerSet(sticker.setName)
+                val stickerSet = execute(stickerSetReq) as StickerSet
+                stateMap[message.chatId] = SessionState.Creation(state.name, state.title)
+
+                for (sticker in stickerSet.stickers) {
+                    copySticker(sticker, stateMap[message.chatId]!!, message.chatId)
+                }
+            }
+            else -> {
+                copySticker(sticker, state, message.chatId)
+            }
         }
+    }
+
+    private fun copySticker(sticker: Sticker, state: SessionState, chatId: Long) {
+        val fileId = sticker.fileId
+        val res = GetFile().setFileId(fileId)
+        val fileResponse = execute(res) as File
+        val image = downloadFile(fileResponse)
+        sendImage(state, image, chatId, sticker.emoji, null)
     }
 
     private fun processPhotoMessage(message: Message) {
@@ -83,10 +106,10 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
         val convertedImage = imageProvider.getImageFile(file)
 
-        sendImage(state, convertedImage, message.chatId, message.caption ?: "☺️")
+        sendImage(state, convertedImage, message.chatId, toEmodji(message.caption),  null)
     }
 
-    private fun sendImage(state: SessionState, convertedImage: java.io.File, chatId: Long, emodji: String) {
+    private fun sendImage(state: SessionState, convertedImage: java.io.File, chatId: Long, emodji: String, mask: MaskPosition?) {
         val message = when (state) {
             is SessionState.Converter -> {
                 execute(SendDocument().setChatId(chatId).setDocument(convertedImage))
@@ -99,7 +122,8 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
             is SessionState.Creation -> {
                 stateMap[chatId] = SessionState.AddSticker(state.name)
                 execute(CreateNewStickerSet(chatId.toInt(), state.name, state.title, emodji).setPngStickerFile(convertedImage).also {
-                    it.containsMasks = false
+                    it.containsMasks = mask != null
+                    it.maskPosition = mask
                 })
                 "Your new sticker set is created and available by link ${state.name.toStickerURL}"
             }
@@ -107,6 +131,20 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         }
         execute(SendMessage(chatId, message))
     }
+
+
+    private val verificationRegex = Pattern.compile("^[A-Za-z][\\w\\d_]+[\\w\\d]$")
+
+    private fun verifyStickerID(name: String) {
+        if (!verificationRegex.matcher(name).matches()) {
+            throw Exception("'$name' is not applicable as sticker set ID")
+        }
+    }
+
+    private val emodjiPattern = Pattern.compile("[\\u20a0-\\u32ff\\ud83c\\udc00-\\ud83d\\udeff\\udbb9\\udce5-\\udbb9\\udcee]")
+
+    private fun toEmodji(s: String?) = s?.let { if (checkEmodji(it)) it else "☺️" } ?: "☺️"
+    private fun checkEmodji(emodji: String) = emodjiPattern.matcher(emodji).matches()
 
     private val String.toStickerURL get() = "https://t.me/addstickers/${this}"
     private val String.stickerPackName get() = "${this}_by_$botUsername"
@@ -118,17 +156,24 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         logger.info { "Command: $text" }
 
         val response = when {
-            text.startsWith("/create") -> {
+            text.startsWith("/create") || text.startsWith("/clone") -> {
                 val tokens = text.split(" ")
+                if (tokens[0] != "/create" && tokens[0] != "/clone") {
+                    logger.warn { "Unknown command $text" }
+                    return
+                }
                 when (tokens.size) {
                     1 -> SendMessage(message.chatId, "Please provide <name> and <title> for you sticker pack")
                     2 -> SendMessage(message.chatId, "Please provide <title> for you sticker pack")
                     else -> {
                         val name = tokens[1]
+                        verifyStickerID(name)
 
                         val title = tokens.drop(2).joinToString(" ")
 
-                        stateMap[message.chatId] = SessionState.Creation(name.stickerPackName, title)
+                        stateMap[message.chatId] =
+                                if (tokens[0] == "/create") SessionState.Creation(name.stickerPackName, title) else
+                                    SessionState.Clone(name.stickerPackName, title)
                         SendMessage(message.chatId, "Now send me the first photo for your new sticker set")
                     }
                 }
@@ -158,6 +203,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         /create <stickerset_id> <title> - creates new sticker pack at the link https://t.me/addstickers/<stickerset_id>_by_<botname>
         /convert - send a photo and I resize and convert it into png
         /select - send me a sticker from set and I will try add a new stickers there
+        /clone - first send me  <stickerset_id> <title> like for /create and in the next message send sticker from set you want to clone
     """.trimIndent()
 
 }
