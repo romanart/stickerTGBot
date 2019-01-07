@@ -1,4 +1,6 @@
 import mu.KLogging
+import org.apache.log4j.FileAppender
+import org.apache.log4j.Logger
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
@@ -15,6 +17,11 @@ import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
 import java.lang.Exception
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
+import org.apache.commons.io.input.ReversedLinesFileReader
+import java.lang.StringBuilder
+import java.nio.charset.Charset
+import kotlin.math.min
+
 
 class RomanTestFirstBot(private val config: Config, private val imageProvider: ImageProvider): TelegramLongPollingBot() {
 
@@ -35,6 +42,8 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
     override fun getBotUsername() = config.botName
     override fun getBotToken() = config.botToken
+
+    private val ownerID = config.ownerID
 
     override fun onUpdateReceived(update: Update) {
         if (update.hasMessage()) {
@@ -61,16 +70,16 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
     private fun processStickerMessage(message: Message) {
         assert(message.hasSticker())
-        val sticker = message.sticker
+        val messageSticker = message.sticker
         val state = stateMap.getOrDefault(message.chatId, SessionState.DEFAULT)
 
         when (state) {
             is SessionState.Select -> {
-                stateMap[message.chatId] = SessionState.AddSticker(sticker.setName)
-                execute(SendMessage(message.chatId, "StickerPack ${sticker.setName} is chosen, send me photo you would like too to it"))
+                stateMap[message.chatId] = SessionState.AddSticker(messageSticker.setName)
+                execute(SendMessage(message.chatId, "StickerPack ${messageSticker.setName} is chosen, send me photo you would like too to it"))
             }
             is SessionState.Clone -> {
-                val stickerSetReq = GetStickerSet(sticker.setName)
+                val stickerSetReq = GetStickerSet(messageSticker.setName)
                 val stickerSet = execute(stickerSetReq) as StickerSet
                 stateMap[message.chatId] = SessionState.Creation(state.name, state.title)
 
@@ -79,7 +88,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
                 }
             }
             else -> {
-                copySticker(sticker, state, message.chatId)
+                copySticker(messageSticker, state, message.chatId)
             }
         }
     }
@@ -130,6 +139,8 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         execute(SendMessage(chatId, message))
     }
 
+    private val defaultLogLineCount = 30
+    private val messageSizeLimit = 4096
 
     private val verificationPattern = Pattern.compile("^[A-Za-z][\\w\\d_]*$")
 
@@ -178,7 +189,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
             }
             text.startsWith("/convert") -> {
                 stateMap[message.chatId] = SessionState.Converter
-                SendMessage(message.chatId, "Now send me sticker from set you want to add new one")
+                SendMessage(message.chatId, "Now send me either photo or sticker you want to convert")
             }
             text.startsWith("/select") -> {
                 stateMap[message.chatId] = SessionState.Select
@@ -186,6 +197,40 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
             }
             text.startsWith("/help") || text.startsWith("/start") -> {
                 SendMessage(message.chatId, HELP_STRING)
+            }
+            text.startsWith("/log") -> {
+                if (message.chatId == ownerID) {
+                    val tokens = text.split(" ")
+                    var limit = min(if (tokens.size > 1) {
+                        tokens[1].toIntOrNull() ?: defaultLogLineCount
+                    } else defaultLogLineCount, 1024)
+                    val appenders = Logger.getRootLogger().allAppenders
+                    val fileAppender = appenders.nextElement() as FileAppender
+                    val loggingFile = java.io.File(fileAppender.file)
+                    val fileReader = ReversedLinesFileReader(
+                        loggingFile,
+                        fileAppender.encoding?.let { Charset.forName(it) } ?: Charset.defaultCharset())
+                    val lines = arrayOfNulls<String>(limit)
+                    for (i in 0 until limit) {
+                        lines[limit - i - 1] = fileReader.readLine()
+                    }
+                    val sb = StringBuilder()
+                    while (limit > 0) {
+                        val newLine = lines[lines.size - limit--]!!
+                        val appendSize = newLine.length + 1 // '\n' symbol
+                        if (sb.length + appendSize >= messageSizeLimit) {
+                            execute(SendMessage(message.chatId, sb.toString()))
+                            sb.clear()
+                        }
+                        sb.append(newLine)
+                        sb.append('\n')
+                    }
+                    if (sb.isNotEmpty()) {
+                        execute(SendMessage(message.chatId, sb.toString()))
+                    }
+                    fileReader.close()
+                }
+                null
             }
             else -> {
                 logger.warn { "Unknown command $text" }
@@ -199,10 +244,10 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
     private val HELP_STRING = """
         /help - show this message
         /create <stickerset_id> <title> - creates new sticker pack at the link https://t.me/addstickers/<stickerset_id>_by_<botname>, do not forget omit `< >` brackets
-           - example: `/create my_new_stockerset_1 LUCKY CATS`
+           - example: `/create my_new_stickerset_1 LUCKY CATS`
         /convert - send a photo and I resize and convert it into png
         /select - send me a sticker from set and I will try add a new stickers there
-        /clone - first send me  <stickerset_id> <title> like for /create and in the next message send sticker from set you want to clone
+        /clone - first send me <stickerset_id> <title> like for /create and in the next message send sticker from set you want to clone
     """.trimIndent()
 
 }
