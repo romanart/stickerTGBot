@@ -1,5 +1,4 @@
 import mu.KLogging
-import mu.KotlinLogging
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
@@ -13,7 +12,6 @@ import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.stickers.MaskPosition
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import java.lang.Exception
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
@@ -133,11 +131,11 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
     }
 
 
-    private val verificationRegex = Pattern.compile("^[A-Za-z][\\w\\d_]+[\\w\\d]$")
+    private val verificationPattern = Pattern.compile("^[A-Za-z][\\w\\d_]*$")
 
     private fun verifyStickerID(name: String) {
-        if (!verificationRegex.matcher(name).matches()) {
-            throw Exception("'$name' is not applicable as sticker set ID")
+        if (!verificationPattern.matcher(name).matches()) {
+            throw Exception("'$name' is not applicable as sticker set ID\nMake sure your ID starts with english character and contains only alphabetic characters, digits or '_' symbol")
         }
     }
 
@@ -200,7 +198,8 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
     private val HELP_STRING = """
         /help - show this message
-        /create <stickerset_id> <title> - creates new sticker pack at the link https://t.me/addstickers/<stickerset_id>_by_<botname>
+        /create <stickerset_id> <title> - creates new sticker pack at the link https://t.me/addstickers/<stickerset_id>_by_<botname>, do not forget omit `< >` brackets
+           - example: `/create my_new_stockerset_1 LUCKY CATS`
         /convert - send a photo and I resize and convert it into png
         /select - send me a sticker from set and I will try add a new stickers there
         /clone - first send me  <stickerset_id> <title> like for /create and in the next message send sticker from set you want to clone
