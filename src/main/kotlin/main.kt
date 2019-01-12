@@ -98,7 +98,7 @@ fun main(args: Array<String>) {
     val config = JSON.parse(Config.serializer(), File(args[0]).readText())
 
     try {
-        botAPI.registerBot(RomanTestFirstBot(config, MockImageProvider))
+        botAPI.registerBot(StickerBot(config, MockImageProvider))
     } catch (ex: TelegramApiException) {
         ex.printStackTrace()
     }

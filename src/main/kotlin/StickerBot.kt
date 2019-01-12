@@ -1,4 +1,5 @@
 import mu.KLogging
+import org.apache.commons.io.input.ReversedLinesFileReader
 import org.apache.log4j.FileAppender
 import org.apache.log4j.Logger
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
@@ -8,22 +9,20 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.stickers.AddStickerToSet
 import org.telegram.telegrambots.meta.api.methods.stickers.CreateNewStickerSet
 import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
+import org.telegram.telegrambots.meta.api.objects.Chat
 import org.telegram.telegrambots.meta.api.objects.File
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.stickers.MaskPosition
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 import org.telegram.telegrambots.meta.api.objects.stickers.StickerSet
-import java.lang.Exception
+import java.nio.charset.Charset
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
-import org.apache.commons.io.input.ReversedLinesFileReader
-import java.lang.StringBuilder
-import java.nio.charset.Charset
 import kotlin.math.min
 
 
-class RomanTestFirstBot(private val config: Config, private val imageProvider: ImageProvider): TelegramLongPollingBot() {
+class StickerBot(private val config: Config, private val imageProvider: ImageProvider): TelegramLongPollingBot() {
 
     companion object: KLogging()
 
@@ -40,6 +39,19 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
     private val stateMap = ConcurrentHashMap<Long, SessionState>()
 
+    private fun userTitle(chat: Chat): String {
+        val sb = StringBuilder()
+
+        chat.userName?.let { sb.append(it) } ?: chat.firstName?.let {
+            sb.append(it)
+            chat.lastName?.let { sb.append(" $it") }
+        }
+
+        sb.append('@')
+        sb.append(chat.id)
+        return sb.toString()
+    }
+
     override fun getBotUsername() = config.botName
     override fun getBotToken() = config.botToken
 
@@ -53,7 +65,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
             if (message.chat.isGroupChat || message.chat.isSuperGroupChat) return
 
 
-            logger.info { "Message from ${chat.userName} (${chat.firstName} ${chat.lastName}, @${chat.id}, @${chat.id.toInt()})" }
+            logger.info { "Message from ${userTitle(chat)}" }
 
             try {
                 when {
@@ -75,10 +87,12 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
 
         when (state) {
             is SessionState.Select -> {
+                logger.info { "Selected sticker pack ${messageSticker.setName}" }
                 stateMap[message.chatId] = SessionState.AddSticker(messageSticker.setName)
                 execute(SendMessage(message.chatId, "StickerPack ${messageSticker.setName} is chosen, send me photo you would like too to it"))
             }
             is SessionState.Clone -> {
+                logger.info { "Cloning sticker pack ${messageSticker.setName} into ${state.name}" }
                 val stickerSetReq = GetStickerSet(messageSticker.setName)
                 val stickerSet = execute(stickerSetReq) as StickerSet
                 stateMap[message.chatId] = SessionState.Creation(state.name, state.title)
@@ -88,6 +102,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
                 }
             }
             else -> {
+                logger.info { "Adding sticker info ${messageSticker.setName} by emodjy ${messageSticker.emoji}" }
                 copySticker(messageSticker, state, message.chatId)
             }
         }
@@ -105,6 +120,8 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         assert(message.hasPhoto())
         val state = stateMap.getOrDefault(message.chatId, SessionState.DEFAULT)
 
+        logger.info { "Adding photo..." }
+
         val photo = message.photo.last()
         val res = GetFile().setFileId(photo.fileId)
         val response2 = execute(res) as File
@@ -120,11 +137,11 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         val message = when (state) {
             is SessionState.Converter -> {
                 execute(SendDocument().setChatId(chatId).setDocument(convertedImage))
-                "Image is converted"
+                "Image is converted".also { logger.info { it } }
             }
             is SessionState.AddSticker -> {
                 execute(AddStickerToSet(chatId.toInt(), state.stickerPackName, emodji).setPngSticker(convertedImage))
-                "Add new sticker to ${state.stickerPackName.toStickerURL}"
+                "Add new sticker to ${state.stickerPackName.toStickerURL}".also { logger.info { it } }
             }
             is SessionState.Creation -> {
                 stateMap[chatId] = SessionState.AddSticker(state.name)
@@ -132,7 +149,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
                     it.containsMasks = mask != null
                     it.maskPosition = mask
                 })
-                "Your new sticker set is created and available by link ${state.name.toStickerURL}"
+                "Your new sticker set is created and available by link ${state.name.toStickerURL}".also { logger.info { it } }
             }
             else -> { "Unknown Command" }
         }
@@ -200,35 +217,7 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
             }
             text.startsWith("/log") -> {
                 if (message.chatId == ownerID) {
-                    val tokens = text.split(" ")
-                    var limit = min(if (tokens.size > 1) {
-                        tokens[1].toIntOrNull() ?: defaultLogLineCount
-                    } else defaultLogLineCount, 1024)
-                    val appenders = Logger.getRootLogger().allAppenders
-                    val fileAppender = appenders.nextElement() as FileAppender
-                    val loggingFile = java.io.File(fileAppender.file)
-                    val fileReader = ReversedLinesFileReader(
-                        loggingFile,
-                        fileAppender.encoding?.let { Charset.forName(it) } ?: Charset.defaultCharset())
-                    val lines = arrayOfNulls<String>(limit)
-                    for (i in 0 until limit) {
-                        lines[limit - i - 1] = fileReader.readLine()
-                    }
-                    val sb = StringBuilder()
-                    while (limit > 0) {
-                        val newLine = lines[lines.size - limit--]!!
-                        val appendSize = newLine.length + 1 // '\n' symbol
-                        if (sb.length + appendSize >= messageSizeLimit) {
-                            execute(SendMessage(message.chatId, sb.toString()))
-                            sb.clear()
-                        }
-                        sb.append(newLine)
-                        sb.append('\n')
-                    }
-                    if (sb.isNotEmpty()) {
-                        execute(SendMessage(message.chatId, sb.toString()))
-                    }
-                    fileReader.close()
+                    sendLastLog(message)
                 }
                 null
             }
@@ -239,6 +228,41 @@ class RomanTestFirstBot(private val config: Config, private val imageProvider: I
         }
 
         response?.let { execute(it) }
+    }
+
+    private fun sendLastLog(message: Message) {
+        val text = message.text
+        val tokens = text.split(" ")
+        var limit = min(
+            if (tokens.size > 1) {
+                tokens[1].toIntOrNull() ?: defaultLogLineCount
+            } else defaultLogLineCount, 1024
+        )
+        val appenders = Logger.getRootLogger().allAppenders
+        val fileAppender = appenders.nextElement() as FileAppender
+        val loggingFile = java.io.File(fileAppender.file)
+        val fileReader = ReversedLinesFileReader(
+            loggingFile,
+            fileAppender.encoding?.let { Charset.forName(it) } ?: Charset.defaultCharset())
+        val lines = arrayOfNulls<String>(limit)
+        for (i in 0 until limit) {
+            lines[limit - i - 1] = fileReader.readLine()
+        }
+        val sb = StringBuilder()
+        while (limit > 0) {
+            val newLine = lines[lines.size - limit--]!!
+            val appendSize = newLine.length + 1 // '\n' symbol
+            if (sb.length + appendSize >= messageSizeLimit) {
+                execute(SendMessage(message.chatId, sb.toString()))
+                sb.clear()
+            }
+            sb.append(newLine)
+            sb.append('\n')
+        }
+        if (sb.isNotEmpty()) {
+            execute(SendMessage(message.chatId, sb.toString()))
+        }
+        fileReader.close()
     }
 
     private val HELP_STRING = """
