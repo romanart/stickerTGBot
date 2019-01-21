@@ -6,6 +6,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.stickers.AddStickerToSet
 import org.telegram.telegrambots.meta.api.methods.stickers.CreateNewStickerSet
 import org.telegram.telegrambots.meta.api.methods.stickers.GetStickerSet
@@ -62,12 +63,12 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
             val message = update.message
             val chat = message.chat
 
-            if (message.chat.isGroupChat || message.chat.isSuperGroupChat) return
-
-
             logger.info { "Message from ${userTitle(chat)}" }
 
+
             try {
+                if (message.chat.isGroupChat || message.chat.isSuperGroupChat) return processGroupMessage(message)
+
                 when {
                     message.hasText() -> processMessageCommand(message)
                     message.hasSticker() -> processStickerMessage(message)
@@ -78,6 +79,40 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
                 execute(SendMessage(chat.id, "Error: ${ex.message ?: "unknown error"}"))
             }
         }
+    }
+
+    private fun processGroupMessage(message: Message) {
+        val text = message.text
+
+        val tokens = text.split(" ")
+
+        if (tokens.size == 1) return
+
+        val command = tokens[0]
+
+        if (command != "/meme" && command != "/meme@$botUsername") return
+
+        val caption = tokens.drop(1).joinToString(" ")
+
+        logger.info { "Caption to meme: $caption" }
+
+        val replayMessage = message.replyToMessage ?: return
+
+        val imageFileId = replayMessage.photo?.last()?.fileId ?: replayMessage.document?.fileId ?: return
+
+        val res1 = GetFile().setFileId(imageFileId)
+        val response1 = (execute(res1) as File).filePath
+
+        val downloadImage = downloadFile(response1)
+
+        logger.info { "Build a meme with ${downloadImage.name}" }
+
+        val memeFile = imageProvider.createMeme(downloadImage, caption)
+
+        execute(SendPhoto().apply {
+            setChatId(message.chatId)
+            setPhoto(memeFile)
+        })
     }
 
     private fun processStickerMessage(message: Message) {
