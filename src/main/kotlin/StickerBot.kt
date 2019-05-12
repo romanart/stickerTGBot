@@ -26,6 +26,7 @@ import kotlin.math.min
 sealed class SessionState {
     object Converter: SessionState()
     object Select : SessionState()
+    object Delete : SessionState()
     class Creation(val name: String, val title: String): SessionState()
     class Clone(val name: String, val title: String): SessionState()
     class AddSticker(val stickerPackName: String): SessionState()
@@ -70,6 +71,8 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
         DoCreate(imageProvider, logger, this),
         ChoseCloner(logger, this),
         DoClone(logger, this),
+        DeleteCommand(logger, this),
+        DoDeleteCommand(logger, this),
         MemeCommand(memeProvider, logger, this),
         HelpCommand("help"),
         HelpCommand("start")
