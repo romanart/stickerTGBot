@@ -41,6 +41,10 @@ abstract class Command<in S: SessionState>(val name: String, protected val logge
                 onStateFail(message, state)
                 return false
             }
+            if (!verifyPermissions(message)) {
+                onPermissionFail(message)
+                return false
+            }
 
             val chat = message.chat
 
