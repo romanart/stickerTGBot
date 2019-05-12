@@ -11,7 +11,7 @@ apply {
 }
 
 group = "RomArt"
-version = "1.0-ALPHA"
+version = "1.0-BETA"
 
 apply(from = "deploy.gradle")
 
