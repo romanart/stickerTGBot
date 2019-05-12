@@ -22,7 +22,7 @@ class MemeCommand(private val memeProvider: MemeProvider, logger: KLogger, botAP
 
         logger.info { "Caption to meme: ${tokens.joinToString(" ")}" }
 
-        val imageFileId = extractPhoto(message)
+        val imageFileId = extractPhoto(message) ?: message.replyToMessage?.let { extractPhoto(it) }
 
         val res1 = GetFile().setFileId(imageFileId)
         val response1 = (botAPI.execute(res1) as File).filePath

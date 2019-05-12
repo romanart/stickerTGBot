@@ -31,7 +31,7 @@ class ChoseConvert(logger: KLogger, botAPI: TelegramLongPollingBot): Command<Ses
 class DoConvertCommand(private val imageProvider: ImageProvider, logger: KLogger, botAPI: TelegramLongPollingBot): Command<SessionState>("<convert>", logger, botAPI) {
     override fun verifyState(state: SessionState) = state == SessionState.Converter
     override val isChatCommand = true
-    override val isGroupCommand = true
+    override val isGroupCommand = false
 
     override fun verifyContent(message: Message) = message.run { hasPhoto() || hasDocument() || hasSticker() }
     override fun verifyArguments(tokens: List<String>) = true

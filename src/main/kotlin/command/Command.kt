@@ -41,11 +41,16 @@ abstract class Command<in S: SessionState>(val name: String, protected val logge
                 onStateFail(message, state)
                 return false
             }
-            return true
+
+            val chat = message.chat
+
+            if (chat.isUserChat) return isChatCommand
+            if (chat.isSuperGroupChat || chat.isGroupChat) return isGroupCommand
+            return false
         } else false
     }
 
-    protected fun extractPhoto(message: Message) = message.photo.last().fileId
+    protected fun extractPhoto(message: Message) = message.photo?.last()?.fileId
     abstract fun process(message: Message, state: S) : SessionState
 }
 
