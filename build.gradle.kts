@@ -20,6 +20,7 @@ repositories {
     jcenter()
     maven(url = "https://jitpack.io")
     maven(url = "https://kotlin.bintray.com/kotlinx")
+    maven(url = "https://dl.bintray.com/orangy/maven")
 }
 
 buildscript {
@@ -37,6 +38,7 @@ dependencies {
     compile("org.jetbrains.kotlinx:kotlinx-serialization-runtime:0.9.1")
     compile("org.slf4j:slf4j-log4j12:1.7.25")
     compile("io.github.microutils:kotlin-logging:1.6.22")
+    compile("org.jetbrains.kotlinx:kotlinx-cli-jvm:0.1.0-dev-4")
 }
 
 application {

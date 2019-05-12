@@ -1,4 +1,3 @@
-import kotlinx.serialization.json.JSON
 import org.telegram.telegrambots.ApiContextInitializer
 import org.telegram.telegrambots.meta.TelegramBotsApi
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
@@ -41,16 +40,16 @@ fun resizeImage(image: Image, scale: Int): BufferedImage {
     return bi
 }
 
-object MockImageProvider: ImageProvider {
-    override fun createMeme(imageFile: File, caption: String): File {
+object MockMemeProvider: MemeProvider {
+    override fun createMeme(imageFile: File, captionTokens: List<String>): File {
         val image = ImageIO.read(imageFile) ?: throw java.lang.Exception("Please don't feed me your bullshit!!!")
         val bufferedImage = BufferedImage(image.width, image.height, image.type)
         val g2d = bufferedImage.createGraphics()
 
         g2d.drawImage(image, 0, 0, null)
 
-        val fontResource = javaClass.classLoader.getResource("Lobster-Regular.ttf").file
-//        val fontResource = fontFile
+//        val fontResource = javaClass.classLoader.getResource("Lobster-Regular.ttf").file
+        val fontResource = fontFile
 
         g2d.font = Font.createFont(Font.TRUETYPE_FONT, FileInputStream(fontResource)).run {
             val size = max(10F, (image.width * 0.1F))
@@ -68,7 +67,7 @@ object MockImageProvider: ImageProvider {
         val pixelsPerLine = bufferedImage.width - 10
 
 
-        val transformedCaption = adoptToImage(caption, pixelsPerLine, fm)
+        val transformedCaption = adoptToImage(captionTokens, pixelsPerLine, fm)
 
         var topOffset = fm.height * transformedCaption.size
 
@@ -95,28 +94,13 @@ object MockImageProvider: ImageProvider {
         }
     }
 
-    private fun drawImageIntoFile(bufferedImage: BufferedImage, outfile: File) {
-        val writers = ImageIO.getImageWritersByFormatName("jpg")
-        val writer = writers.next() as ImageWriter
-        //        val outfile = File("tmp.jpg")
-        val os = FileOutputStream(outfile)
-        val ios = ImageIO.createImageOutputStream(os)
-        writer.output = ios
-
-        val param = writer.defaultWriteParam
-
-        param.compressionMode = ImageWriteParam.MODE_DEFAULT
-
-        writer.write(null, IIOImage(bufferedImage, null, null), param)
-    }
-
-    private fun adoptToImage(caption: String, charsInLine: Int, fm: FontMetrics): List<String> {
+    private fun adoptToImage(captionTokens: List<String>, charsInLine: Int, fm: FontMetrics): List<String> {
 
         if (charsInLine < fm.charWidth('W')) throw java.lang.Exception("Image is too small (width) to create a meme")
 
         val result = mutableListOf<String>()
 
-        val words = caption.split(" ")
+        val words = captionTokens
 
         var currentLineSize = 0
         val sb = StringBuilder()
@@ -145,6 +129,26 @@ object MockImageProvider: ImageProvider {
 
         return result
     }
+
+
+    private fun drawImageIntoFile(bufferedImage: BufferedImage, outfile: File) {
+        val writers = ImageIO.getImageWritersByFormatName("jpg")
+        val writer = writers.next() as ImageWriter
+        //        val outfile = File("tmp.jpg")
+        val os = FileOutputStream(outfile)
+        val ios = ImageIO.createImageOutputStream(os)
+        writer.output = ios
+
+        val param = writer.defaultWriteParam
+
+        param.compressionMode = ImageWriteParam.MODE_DEFAULT
+
+        writer.write(null, IIOImage(bufferedImage, null, null), param)
+    }
+
+}
+
+object MockImageProvider: ImageProvider {
 
     override fun getImageFile(imageFile: File): File {
         val image = ImageIO.read(imageFile)
@@ -197,21 +201,17 @@ object MockImageProvider: ImageProvider {
 fun main(args: Array<String>) {
     println("I am Telegram sticker bot!")
 
-    if (args.isEmpty()) throw Exception("Please provide config file")
-
-//    val log4jProp = Properties()
-//    log4jProp.setProperty("log4j.rootLogger", "TRACE")
-//    PropertyConfigurator.configure(log4jProp)
+    val cli = CliInterface(args)
 
     ApiContextInitializer.init()
 
     val botAPI = TelegramBotsApi()
-//    fontFile = File(args[1])
+    fontFile = cli.fontFile
 
-    val config = JSON.parse(Config.serializer(), File(args[0]).readText())
+    val config = parseConfig(cli.configFile)
 
     try {
-        botAPI.registerBot(StickerBot(config, MockImageProvider))
+        botAPI.registerBot(StickerBot(config, MockImageProvider, MockMemeProvider))
     } catch (ex: TelegramApiException) {
         ex.printStackTrace()
     }
