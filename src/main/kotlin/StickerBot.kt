@@ -74,6 +74,7 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
         DeleteCommand(logger, this),
         DoDeleteCommand(logger, this),
         MemeCommand(memeProvider, logger, this),
+        TossCommand(logger, this),
         HelpCommand("help"),
         HelpCommand("start")
     )
