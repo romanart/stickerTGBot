@@ -37,7 +37,7 @@ class DoSelectCommand(logger: KLogger, botAPI: TelegramLongPollingBot):
 
     override fun verifyState(state: SessionState) = state === SessionState.Select
 
-    override fun verifyContent(message: Message) = message.hasSticker() && message.sticker.setName.endsWith("_by_$botName")
+    override fun verifyContent(message: Message) = message.hasSticker() && message.sticker.setName?.endsWith("_by_$botName") == true
 
     override fun verifyCommand(command: String) = true
 

@@ -52,7 +52,7 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
     override fun onUpdateReceived(update: Update) {
         if (update.hasMessage()) {
             val message = update.message
-            if (message.chat.isUserChat) logger.info { "from: ${message.chatId}, text: ${message.text ?: "<empty>"}" }
+            if (message.hasText() && message.text.startsWith("/")) logger.info { "from: ${message.chatId}, text: ${message.text ?: "<empty>"}" }
             val state = stateMap[message.chatId] ?: SessionState.DEFAULT
             try {
                 commands.firstOrNull { it.checkCommand(message, state) }?.let {
