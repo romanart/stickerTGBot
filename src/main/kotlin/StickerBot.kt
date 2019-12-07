@@ -56,6 +56,7 @@ class StickerBot(private val config: Config, private val imageProvider: ImagePro
             val state = stateMap[message.chatId] ?: SessionState.DEFAULT
             try {
                 commands.firstOrNull { it.checkCommand(message, state) }?.let {
+                    @Suppress("UNCHECKED_CAST")
                     (it as Command<SessionState>).process(
                         message,
                         state
