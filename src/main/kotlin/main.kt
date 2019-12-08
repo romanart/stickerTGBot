@@ -1,15 +1,25 @@
+import database.AWSDatabaseConnection
+import database.DatabaseAccessManager
+import database.MySQLDatabaseLocalConnection
+import org.apache.http.HttpHost
+import org.apache.http.auth.AuthScope
+import org.apache.http.auth.UsernamePasswordCredentials
+import org.apache.http.client.CredentialsProvider
+import org.apache.http.client.config.RequestConfig
+import org.apache.http.impl.client.BasicCredentialsProvider
+import org.glassfish.jersey.client.ClientProperties.PROXY_PASSWORD
 import org.telegram.telegrambots.ApiContextInitializer
+import org.telegram.telegrambots.bots.DefaultBotOptions
+import org.telegram.telegrambots.meta.ApiContext
 import org.telegram.telegrambots.meta.TelegramBotsApi
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
-import java.awt.Color
-import java.awt.Font
-import java.awt.FontMetrics
-import java.awt.Image
-import java.awt.RenderingHints
+import java.awt.*
 import java.awt.image.BufferedImage
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.Authenticator
+import java.net.PasswordAuthentication
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
@@ -25,8 +35,6 @@ fun scale(imageSize: Pair<Int, Int>, scaleSize: Int) : Pair<Int, Int> {
 
 private const val maxSize = 512 * 1024
 
-private lateinit var fontFile: File
-
 fun resizeImage(image: Image, scale: Int): BufferedImage {
     val oldWidth = image.getWidth(null)
     val oldHeight = image.getHeight(null)
@@ -40,7 +48,10 @@ fun resizeImage(image: Image, scale: Int): BufferedImage {
     return bi
 }
 
-object MockMemeProvider: MemeProvider {
+class MockMemeProvider(fontFile: File): MemeProvider {
+
+    private val font = Font.createFont(Font.TRUETYPE_FONT, FileInputStream(fontFile))
+
     override fun createMeme(imageFile: File, captionTokens: List<String>): File {
         val image = ImageIO.read(imageFile) ?: throw java.lang.Exception("Please don't feed me your bullshit!!!")
         val bufferedImage = BufferedImage(image.width, image.height, image.type)
@@ -48,10 +59,7 @@ object MockMemeProvider: MemeProvider {
 
         g2d.drawImage(image, 0, 0, null)
 
-//        val fontResource = javaClass.classLoader.getResource("Lobster-Regular.ttf").file
-        val fontResource = fontFile
-
-        g2d.font = Font.createFont(Font.TRUETYPE_FONT, FileInputStream(fontResource)).run {
+        g2d.font = font.run {
             val size = max(10F, (image.width * 0.1F))
             deriveFont(/*Font.BOLD, */size)
         }
@@ -148,12 +156,12 @@ object MockMemeProvider: MemeProvider {
 
 }
 
-object MockImageProvider: ImageProvider {
+class MockImageProvider(private val workingDirectory: File): ImageProvider {
 
     override fun getImageFile(imageFile: File): File {
         val image = ImageIO.read(imageFile)
         val newImage = resizeImage(image, 512)
-        val outfile = File.createTempFile("save", ".png").also { it.deleteOnExit() }
+        val outfile = createTempFile("save", ".png", workingDirectory)
         ImageIO.write(newImage, "png", outfile)
 
         if (outfile.length() > maxSize) {
@@ -175,7 +183,7 @@ object MockImageProvider: ImageProvider {
         val image = ImageIO.read(file)
         val writers = ImageIO.getImageWritersByFormatName("jpg")
         val writer = writers.next() as ImageWriter
-        val tmpFile = File.createTempFile("compress", ".jpg").also { it.deleteOnExit() }
+        val tmpFile = createTempFile("compress", ".jpg", workingDirectory)
         val os = FileOutputStream(tmpFile)
         val ios = ImageIO.createImageOutputStream(os)
         writer.output = ios
@@ -206,12 +214,16 @@ fun main(args: Array<String>) {
     ApiContextInitializer.init()
 
     val botAPI = TelegramBotsApi()
-    fontFile = cli.fontFile
-
+    val workingDirectory = createTempDir().also { it.mkdir() }
     val config = parseConfig(cli.configFile)
+    val botOptions = ApiContext.getInstance(DefaultBotOptions::class.java)
+
+    val dbConnection = DatabaseAccessManager(config.databaseConfig).createDatabaseConnection()
+
+    println(dbConnection)
 
     try {
-        botAPI.registerBot(StickerBot(config, MockImageProvider, MockMemeProvider))
+        botAPI.registerBot(StickerBot(config, MockImageProvider(workingDirectory), MockMemeProvider(cli.fontFile), dbConnection, workingDirectory, botOptions))
     } catch (ex: TelegramApiException) {
         ex.printStackTrace()
     }

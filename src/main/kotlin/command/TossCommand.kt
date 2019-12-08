@@ -1,21 +1,15 @@
 package command
 
-import mu.KLogger
-import org.telegram.telegrambots.bots.TelegramLongPollingBot
-import SessionState
+import StickerBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import java.security.SecureRandom
 
-class TossCommand(logger: KLogger, botAPI: TelegramLongPollingBot) : Command<SessionState>("toss", logger, botAPI) {
-    override fun verifyArguments(tokens: List<String>) = true
-
-    override fun verifyState(state: SessionState) = true
+class TossCommand : TextCommand("/toss", "Flip the coin") {
 
     private val random = SecureRandom.getInstance("SHA1PRNG").also { it.setSeed(System.currentTimeMillis()) }
 
-    override fun process(message: Message, state: SessionState): SessionState {
-
+    override fun execute(message: Message, botAPI: StickerBot): String? {
         val seed = random.nextInt(100000)
 
         val result = when {
@@ -26,9 +20,8 @@ class TossCommand(logger: KLogger, botAPI: TelegramLongPollingBot) : Command<Ses
         }
 
         botAPI.execute(SendMessage(message.chatId, result).also { it.replyToMessageId = message.messageId })
-        return state
+        return null
     }
 
-    override val isChatCommand = true
-    override val isGroupCommand = true
 }
+

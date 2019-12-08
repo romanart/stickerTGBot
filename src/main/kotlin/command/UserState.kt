@@ -2,5 +2,7 @@ package command
 
 enum class UserState {
     EMPTY,
-    ADD
+    ADD,
+    CONVERT,
+    SELECT
 }

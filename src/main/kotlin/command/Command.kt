@@ -1,60 +1,19 @@
 package command
 
+import StickerBot
 import org.telegram.telegrambots.meta.api.objects.Message
-import org.telegram.telegrambots.bots.TelegramLongPollingBot
-import SessionState
-import mu.KLogger
 
-abstract class Command<in S: SessionState>(val name: String, protected val logger: KLogger, protected val botAPI: TelegramLongPollingBot) {
-    abstract val isChatCommand: Boolean
-    abstract val isGroupCommand: Boolean
+abstract class BotCommand(val description: String) {
+    abstract fun execute(message: Message, botAPI: StickerBot): String?
+}
 
-    protected val botName = botAPI.botUsername
+abstract class TextCommand(val name: String, val hidden: Boolean, description: String) : BotCommand(description) {
 
-    abstract fun verifyArguments(tokens: List<String>): Boolean
-    protected open fun verifyContent(message: Message) = true
-    protected open fun verifyCommand(command: String) = command == "/$name" || command == "/$name@$botName"
-    protected abstract fun verifyState(state: SessionState): Boolean
-    protected open fun verifyPermissions(message: Message) = true
-
-    protected open fun onArgumentsFail(message: Message) {}
-    protected open fun onStateFail(message: Message, state: SessionState) {}
-    protected open fun onContentFail(message: Message) {}
-    protected open fun onPermissionFail(message: Message) {}
+    constructor(name: String, description: String) : this(name, false, description)
 
     protected fun tokenizeCommand(message: Message) = (message.text ?: message.caption)?.split(" ") ?: emptyList()
 
-    fun checkCommand(message: Message, state: SessionState): Boolean {
-        val tokens = tokenizeCommand(message)
-        val command = tokens.firstOrNull() ?: ""
-
-        return if (verifyCommand(command)) {
-            if (!verifyArguments(tokens)) {
-                onArgumentsFail(message)
-                return false
-            }
-            if (!verifyContent(message)) {
-                onContentFail(message)
-                return false
-            }
-            if (!verifyState(state)) {
-                onStateFail(message, state)
-                return false
-            }
-            if (!verifyPermissions(message)) {
-                onPermissionFail(message)
-                return false
-            }
-
-            val chat = message.chat
-
-            if (chat.isUserChat) return isChatCommand
-            if (chat.isSuperGroupChat || chat.isGroupChat) return isGroupCommand
-            return false
-        } else false
-    }
-
-    protected fun extractPhoto(message: Message) = message.photo?.last()?.fileId
-    abstract fun process(message: Message, state: S) : SessionState
 }
 
+abstract class SpecialCommand(val state: UserState, description: String) : BotCommand(description) {
+}

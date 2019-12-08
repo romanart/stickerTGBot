@@ -1,30 +1,21 @@
 package command
 
-import mu.KLogger
-import SessionState
+import StickerBot
 import org.apache.commons.io.input.ReversedLinesFileReader
 import org.apache.log4j.FileAppender
 import org.apache.log4j.Logger
-import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import java.nio.charset.Charset
 import kotlin.math.min
 
-class LogCommand(private val ownerID: Long, logger: KLogger, botAPI: TelegramLongPollingBot): Command<SessionState>("log", logger, botAPI) {
-    override val isChatCommand = true
-    override val isGroupCommand = false
-
-    override fun verifyArguments(tokens: List<String>) = tokens.size < 2
-
-    override fun verifyState(state: SessionState) = true
-
-    override fun verifyPermissions(message: Message) = message.chatId == ownerID
-
+class LogCommand(private val ownerID: Long): TextCommand("/log", true, "Print bot log to admin chat") {
     private val defaultLogLineCount = 30
     private val messageSizeLimit = 4096
 
-    override fun process(message: Message, state: SessionState) = state.also {
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (!message.isUserMessage) return null
+        if (message.chatId != ownerID) return null
 
         val tokens = tokenizeCommand(message)
         var limit = min(
@@ -59,5 +50,7 @@ class LogCommand(private val ownerID: Long, logger: KLogger, botAPI: TelegramLon
             botAPI.execute(SendMessage(message.chatId, sb.toString()))
         }
         fileReader.close()
+
+        return null
     }
 }
