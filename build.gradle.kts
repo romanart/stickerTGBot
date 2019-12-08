@@ -38,6 +38,11 @@ dependencies {
     compile("org.slf4j:slf4j-log4j12:1.7.25")
     compile("io.github.microutils:kotlin-logging:1.6.22")
     compile("org.jetbrains.kotlinx:kotlinx-cli-jvm:0.1.0-dev-4")
+
+    implementation("com.amazonaws:aws-java-sdk-rds:1.11.688")
+    implementation("com.amazonaws:aws-java-sdk-core:1.9.17")
+
+    implementation("mysql:mysql-connector-java:8.0.16")
 }
 
 application {
