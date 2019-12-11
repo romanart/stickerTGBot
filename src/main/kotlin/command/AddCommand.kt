@@ -10,13 +10,12 @@ import org.telegram.telegrambots.meta.api.objects.Message
 private class AddExecutor(private val imageProvider: ImageProvider) {
 
 
-    private fun addStickerToStickerSet(message: Message, setName: String, botAPI: StickerBot): String {
+    private fun addStickerToStickerSet(message: Message, setName: String, owner_id: Int, botAPI: StickerBot): String {
         val sticker = message.sticker!!
         val fileID = sticker.fileId
         val fileResponse = botAPI.execute(GetFile().setFileId(fileID)) as File
         val file = botAPI.downloadFile(fileResponse)
-        val userId = message.from!!.id
-        botAPI.execute(AddStickerToSet(userId, setName, sticker.emoji).setPngSticker(file))
+        botAPI.execute(AddStickerToSet(owner_id, setName, sticker.emoji).setPngSticker(file))
         return "Added new sticker to ${setName.toStickerURL}"
     }
 
@@ -24,6 +23,7 @@ private class AddExecutor(private val imageProvider: ImageProvider) {
         message: Message,
         setName: String,
         emoji: String,
+        owner_id: Int,
         botAPI: StickerBot
     ): String {
         val fileID = message.extractPhoto()
@@ -32,29 +32,29 @@ private class AddExecutor(private val imageProvider: ImageProvider) {
         val file = botAPI.downloadFile(filePhoto)
 
         val convertedImage = imageProvider.getImageFile(file)
-        val userId = message.from!!.id
 
-        botAPI.execute(AddStickerToSet(userId, setName, emoji).setPngSticker(convertedImage))
+        botAPI.execute(AddStickerToSet(owner_id, setName, emoji).setPngSticker(convertedImage))
         return "Add new sticker to ${setName.toStickerURL}"
     }
 
     private fun extractEmoji(message: Message) = message.tokenizeCommand().firstOrNull { checkEmodji(it) }
 
-    fun execute(message: Message, botAPI: StickerBot, isSpecial: Boolean): String? {
+    fun execute(message: Message, stickerSetName: String, owner_id: Int, botAPI: StickerBot): String? {
         try {
-            val currentStickerSet =
-                botAPI.getCurrentStickerSet(message.from.id, message.chatId) ?: return "Please chose sticker pack first"
+            val currentStickerSet = stickerSetName
+//
             val emoji = extractEmoji(message) ?: botAPI.getDefaultEmojy(message.chatId) ?: "☺️"
-            if (message.hasPhoto()) return addPhotoToStickerSet(message, currentStickerSet, emoji, botAPI)
-            if (message.hasSticker()) return addStickerToStickerSet(message, currentStickerSet, botAPI)
+            if (message.hasPhoto()) return addPhotoToStickerSet(message, currentStickerSet, emoji, owner_id, botAPI)
+            if (message.hasSticker()) return addStickerToStickerSet(message, currentStickerSet, owner_id, botAPI)
             val replyMessage = message.replyToMessage ?: return "Nothing to add"
             if (replyMessage.hasPhoto()) return addPhotoToStickerSet(
                 replyMessage,
                 currentStickerSet,
                 emoji,
+                owner_id,
                 botAPI
             )
-            if (replyMessage.hasSticker()) return addStickerToStickerSet(replyMessage, currentStickerSet, botAPI)
+            if (replyMessage.hasSticker()) return addStickerToStickerSet(replyMessage, currentStickerSet, owner_id, botAPI)
             return "Nothing to add"
         } catch (e: Throwable) {
             if (message.chat.isUserChat) throw e
@@ -69,7 +69,8 @@ class AddCommand(imageProvider: ImageProvider): TextCommand("/add", "Add image o
 
 
     override fun execute(message: Message, botAPI: StickerBot): String? {
-        return executor.execute(message, botAPI, false)
+        val stickerSetName = botAPI.getCurrentStickerSet(message.from.id, message.chatId) ?: return "Please chose sticker pack first"
+        return executor.execute(message, stickerSetName, message.from.id, botAPI)
     }
 }
 
@@ -77,6 +78,22 @@ class AddSpecialCommand(imageProvider: ImageProvider) : SpecialCommand(UserState
     private val executor = AddExecutor(imageProvider)
 
     override fun execute(message: Message, botAPI: StickerBot): String? {
-        return executor.execute(message, botAPI, true)
+        val stickerSetName = botAPI.getCurrentStickerSet(message.from.id, message.chatId) ?: return "Please chose sticker pack first"
+        return executor.execute(message, stickerSetName, message.from.id, botAPI)
     }
+}
+
+class AddGroupCommand(imageProvider: ImageProvider) : TextCommand("/gadd", "Add sticker to group sticker pack") {
+    private val executor = AddExecutor(imageProvider)
+
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        val groupStickerPack = botAPI.getGroupStickerPack(message.chatId) ?: return "Select sticker pack using /gselect"
+
+        val ownerId = botAPI.getStickerPackOwner(groupStickerPack)
+
+        require(ownerId >= 0)
+
+        return executor.execute(message, groupStickerPack, ownerId, botAPI)
+    }
+
 }

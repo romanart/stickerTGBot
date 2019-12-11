@@ -52,6 +52,7 @@ class CreateNewStickerSet(private val imageProvider: ImageProvider) : TextComman
 
         botAPI.setCurrentStickerPack(userId, message.chatId, stickerSetName)
         botAPI.setUserState(userId, message.chatId, UserState.ADD)
+        botAPI.setStickerPackOwner(stickerSetName, userId)
 
         return "Your new sticker set is created and available by link ${stickerSetName.toStickerURL}"
     }

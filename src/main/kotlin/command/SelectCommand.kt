@@ -39,3 +39,18 @@ class SelectSpecialCommand : SpecialCommand(UserState.SELECT, "Send me a sticker
         return "Its in not my sticker pack ${stickerPack.setName}"
     }
 }
+
+class SelectGroupCommand : TextCommand("/gselect", "Select group sticker pack") {
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        val sticker = message.replyToMessage?.sticker ?: return "Reply with sticker"
+        val stickerSetName = sticker.setName.also {
+            if (!botAPI.isMyOwnSticker(it)) return "Sorry, it's now my sticker pack"
+        }
+
+        val stickerOwner = botAPI.getStickerPackOwner(stickerSetName)
+        if (stickerOwner < 0) return "Sorry, I don't know who is owner of sticker pack"
+
+        botAPI.setGroupStickerPack(message.chatId, stickerSetName)
+        return null
+    }
+}

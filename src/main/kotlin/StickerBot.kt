@@ -20,9 +20,11 @@ class StickerBot(
         const val USER_STATE_TABLE = "userState"
         const val USER_CURRENT_STICKER_PACK_TABLE = "userCurrentStickerPack"
         const val USER_STICKER_PACKS_TABLE = "userStickerPacks"
-        const val USER_DEFAULT_EMPJI_TABLE = "defaultUserEmojy"
+        const val USER_DEFAULT_EMOJI_TABLE = "defaultUserEmojy"
         const val CHAT_WELCOME_MESSAGE_TABLE = "chatWelcomeMessage"
         const val CHAT_USER_CAPTION_TABLE = "chatUserCaption"
+        const val STICKER_PACK_OWNER_TABLE = "stickerPackOwner"
+        const val GROUP_STICKER_PACK_TABLE = "groupStickerPack"
     }
 
     override fun onClosing() {
@@ -49,6 +51,8 @@ class StickerBot(
         AddCommand(imageProvider),
         MemeCommand(memeProvider),
         CreateNewStickerSet(imageProvider),
+        AddGroupCommand(imageProvider),
+        SelectGroupCommand(),
         DefaultEmojy(),
         ResetCommand(),
         StopCommand(ownerID)
@@ -131,7 +135,7 @@ class StickerBot(
 
     fun getDefaultEmojy(chatId: Long): String? {
         val query =
-            "SELECT emojy FROM $USER_DEFAULT_EMPJI_TABLE " +
+            "SELECT emojy FROM $USER_DEFAULT_EMOJI_TABLE " +
             "WHERE user_id = $chatId;"
 
         logger.info { "QUERY: $query" }
@@ -168,9 +172,54 @@ class StickerBot(
 
     fun setDefaultEmoji(chatId: Long, newEmoji: String) {
         val query =
-            "INSERT INTO $USER_DEFAULT_EMPJI_TABLE (user_id, emojy) " +
+            "INSERT INTO $USER_DEFAULT_EMOJI_TABLE (user_id, emojy) " +
             "VALUES ($chatId, '$newEmoji') ON DUPLICATE KEY " +
             "UPDATE emojy = '$newEmoji';"
+
+        logger.info { "QUERY: $query" }
+
+        dbConnection.executeUpdate(query)
+    }
+
+    fun getStickerPackOwner(stickerPackName: String): Int {
+        val query =
+            "SELECT owner_id FROM $STICKER_PACK_OWNER_TABLE " +
+            "WHERE sticker_pack_id = '$stickerPackName'"
+
+        logger.info { "QUERY: $query" }
+
+        return dbConnection.executeQuery(query) { r ->
+            if (r.next()) r.getInt(1) else -1
+        }
+    }
+
+    fun setStickerPackOwner(stickerPackName: String, ownerId: Int) {
+        val query =
+            "INSERT INTO $STICKER_PACK_OWNER_TABLE (sticker_pack_id, owner_id) " +
+             "VALUES ('$stickerPackName', $ownerId)"
+
+        logger.info { "QUERY: $query" }
+
+        dbConnection.executeUpdate(query)
+    }
+
+    fun getGroupStickerPack(chat_id: Long): String? {
+        val query =
+            "SELECT sticker_pack_name FROM $GROUP_STICKER_PACK_TABLE " +
+            "WHERE chat_id = $chat_id"
+
+        logger.info { "QUERY: $query" }
+
+        return dbConnection.executeQuery(query) { r ->
+            if (r.next()) r.getString(1) else null
+        }
+    }
+
+    fun setGroupStickerPack(chat_id: Long, stickerPackName: String) {
+        val query =
+            "INSERT INTO $GROUP_STICKER_PACK_TABLE (chat_id, sticker_pack_name) " +
+            "VALUES ($chat_id, '$stickerPackName') ON DUPLICATE KEY " +
+            "UPDATE sticker_pack_name = '$stickerPackName';"
 
         logger.info { "QUERY: $query" }
 
