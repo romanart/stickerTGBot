@@ -12,7 +12,7 @@ apply {
 }
 
 group = "RomArt"
-version = "1.0-BETA"
+version = "1.0"
 
 repositories {
     mavenCentral()
