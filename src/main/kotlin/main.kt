@@ -1,6 +1,4 @@
-import database.AWSDatabaseConnection
-import database.DatabaseAccessManager
-import database.MySQLDatabaseLocalConnection
+import database.*
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -20,6 +18,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.Authenticator
 import java.net.PasswordAuthentication
+import java.util.*
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
@@ -221,6 +220,8 @@ fun main(args: Array<String>) {
     val dbConnection = DatabaseAccessManager(config.databaseConfig).createDatabaseConnection()
 
     println(dbConnection)
+
+    Timer("Database ping (every 5 hours)", true).scheduleAtFixedRate(DatabasePingTask(dbConnection), 1000, 5 * 60 * 60 * 1000)
 
     try {
         botAPI.registerBot(StickerBot(config, MockImageProvider(workingDirectory), MockMemeProvider(cli.fontFile), dbConnection, workingDirectory, botOptions))
