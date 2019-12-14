@@ -15,3 +15,7 @@ internal fun Message.extractPhoto() = photo?.last()?.fileId
 internal fun Message.extractStickerPhoto() = sticker?.fileId
 
 internal fun Message.tokenizeCommand() = (text ?: caption)?.split(" ") ?: emptyList()
+
+internal fun String.sanitaze(): String = replace("'", "_").replace(";", "_")
+
+internal fun Message.userName(): String = from.run { (firstName ?: "") + " " + (lastName ?: "")  }.trim()

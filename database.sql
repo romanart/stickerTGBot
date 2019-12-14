@@ -54,3 +54,29 @@ CREATE TABLE IF NOT EXISTS chatUserCaption (
     welcome_message  VARCHAR(1000) NOT NULL,
     CONSTRAINT uniqChatUser UNIQUE (chat_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS hogwartsGameRole (
+  user_id BIGINT NOT NULL,
+  chat_id BIGINT NOT NULL,
+  team_id INT NOT NULL,
+  snitch_score INT NOT NULL,
+  prihod_score INT NOT NULL,
+
+  last_stitch_time BIGINT NOT NULL,
+  last_prihod_time BIGINT NOT NULL,
+
+  PRIMARY KEY (user_id, chat_id)
+);
+
+CREATE TABLE IF NOT EXISTS hogwartsStats (
+  chat_id BIGINT NOT NULL UNIQUE,
+
+  gryffindor_score INT NOT NULL,
+  ravenclaw_score INT NOT NULL,
+  hufflepuff_score INT NOT NULL,
+  slythering_score INT NOT NULL,
+
+  last_success VARCHAR(100) NOT NULL ,
+
+  PRIMARY KEY (chat_id)
+);

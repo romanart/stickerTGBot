@@ -6,6 +6,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Update
 import java.io.File
+import java.sql.ResultSet
 
 class StickerBot(
     private val config: Config,
@@ -58,7 +59,19 @@ class StickerBot(
         StopCommand(ownerID)
     )
 
+    private val actions = listOf(
+        StartHogwartsAction(),
+        PutHatAction(),
+        CatchASnithAction(),
+        CatchAPrihodAction(),
+        HogwartsScoreAction(),
+        HogwartsPersonalScoreAction(),
+        NegotiateAction()
+    )
+
     val textCommands get() = textBasedCommand
+
+    val textActions get() = actions
 
     private val userSpecialCommand = listOf(
         SelectSpecialCommand(),
@@ -81,18 +94,31 @@ class StickerBot(
                     val command = textBasedCommand.firstOrNull { messageText.startsWith("${it.name} ") || messageText == it.name }
                     if (command != null) {
                         command.execute(message, this)?.let { response ->
-                            execute(SendMessage(message.chatId, response))
+                            execute(SendMessage(message.chatId, response).also {
+                                it.replyToMessageId = message.messageId
+                            })
                         }
                     } else reportUnknownCommand(messageText, message.chat.isUserChat, message.chatId)
+                } else if (messageText.startsWith("!")) {
+                    val action = actions.firstOrNull { it.checkAction(messageText) }
+                    if (action != null) {
+                        action.execute(message, this)?.let { response ->
+                            execute(SendMessage(message.chatId, response).also {
+                                it.replyToMessageId = message.messageId
+                            })
+                        }
+                    }
                 } else if (message.chat.isUserChat) {
                     val currentState = getUserState(message.from!!.id, message.chatId)
                     userSpecialCommand.firstOrNull { it.state == currentState }?.let { command ->
                         command.execute(message, this)?.let { response ->
-                            execute(SendMessage(message.chatId, response))
+                            execute(SendMessage(message.chatId, response).also {
+                                it.replyToMessageId = message.messageId
+                            })
                         }
                     }
                 } else {
-                    // TODO: special actions like user leave on join the chat
+                    // TODO: special actions like user leave or join the chat
                 }
             } catch (ex: Exception) {
                 logger.warn { ex.toString() }
@@ -225,4 +251,19 @@ class StickerBot(
 
         dbConnection.executeUpdate(query)
     }
+
+    fun <R> executeQuery(query: String, handler: (ResultSet) -> R): R {
+
+        logger.info { "QUERY: $query" }
+
+        return dbConnection.executeQuery(query, handler)
+    }
+
+    fun executeUpdate(query: String) {
+
+        logger.info { "QUERY: $query" }
+
+        dbConnection.executeUpdate(query)
+    }
+
 }
