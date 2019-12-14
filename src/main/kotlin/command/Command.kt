@@ -19,5 +19,14 @@ abstract class TextCommand(val name: String, val hidden: Boolean, description: S
 
 }
 
+abstract class ActionCommand(val name: String, description: String) : BotCommand(description) {
+
+    open fun checkAction(action: String) = action.startsWith(name) || action == name
+
+    init {
+        require(name[0] == '!')
+    }
+}
+
 abstract class SpecialCommand(val state: UserState, description: String) : BotCommand(description) {
 }
