@@ -11,6 +11,10 @@ abstract class TextCommand(val name: String, val hidden: Boolean, description: S
 
     constructor(name: String, description: String) : this(name, false, description)
 
+    init {
+        require(name[0] == '/')
+    }
+
     protected fun tokenizeCommand(message: Message) = (message.text ?: message.caption)?.split(" ") ?: emptyList()
 
 }
