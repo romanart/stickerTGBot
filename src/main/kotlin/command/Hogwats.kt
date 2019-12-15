@@ -138,7 +138,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
         updateCooldown(message, botAPI)
 
-        if (random.nextInt(100) <= 93) return loseMessage
+        if (random.nextInt(100) <= 90) return loseMessage
 
         val queryChat =
             "UPDATE $HOGWARTS_STATS_TABLE " +

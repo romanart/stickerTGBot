@@ -90,35 +90,40 @@ class StickerBot(
             }
             val messageText = message.text ?: message.caption ?: ""
             try {
-                if (messageText.startsWith("/")) {
-                    val command = textBasedCommand.firstOrNull { messageText.startsWith("${it.name} ") || messageText == it.name }
-                    if (command != null) {
-                        command.execute(message, this)?.let { response ->
-                            execute(SendMessage(message.chatId, response).also {
-                                it.replyToMessageId = message.messageId
-                            })
-                        }
-                    } else reportUnknownCommand(messageText, message.chat.isUserChat, message.chatId)
-                } else if (messageText.startsWith("!")) {
-                    val action = actions.firstOrNull { it.checkAction(messageText) }
-                    if (action != null) {
-                        action.execute(message, this)?.let { response ->
-                            execute(SendMessage(message.chatId, response).also {
-                                it.replyToMessageId = message.messageId
-                            })
+                when {
+                    messageText.startsWith("/") -> {
+                        val command = textBasedCommand.firstOrNull { messageText.startsWith("${it.name} ") || messageText == it.name }
+                        if (command != null) {
+                            command.execute(message, this)?.let { response ->
+                                execute(SendMessage(message.chatId, response).also {
+                                    it.replyToMessageId = message.messageId
+                                })
+                            }
+                        } else reportUnknownCommand(messageText, message.chat.isUserChat, message.chatId)
+                    }
+                    messageText.startsWith("!") -> {
+                        val action = actions.firstOrNull { it.checkAction(messageText) }
+                        if (action != null) {
+                            action.execute(message, this)?.let { response ->
+                                execute(SendMessage(message.chatId, response).also {
+                                    it.replyToMessageId = message.messageId
+                                })
+                            }
                         }
                     }
-                } else if (message.chat.isUserChat) {
-                    val currentState = getUserState(message.from!!.id, message.chatId)
-                    userSpecialCommand.firstOrNull { it.state == currentState }?.let { command ->
-                        command.execute(message, this)?.let { response ->
-                            execute(SendMessage(message.chatId, response).also {
-                                it.replyToMessageId = message.messageId
-                            })
+                    message.chat.isUserChat -> {
+                        val currentState = getUserState(message.from!!.id, message.chatId)
+                        userSpecialCommand.firstOrNull { it.state == currentState }?.let { command ->
+                            command.execute(message, this)?.let { response ->
+                                execute(SendMessage(message.chatId, response).also {
+                                    it.replyToMessageId = message.messageId
+                                })
+                            }
                         }
                     }
-                } else {
-                    // TODO: special actions like user leave or join the chat
+                    else -> {
+                        // TODO: special actions like user leave or join the chat
+                    }
                 }
             } catch (ex: Exception) {
                 logger.warn { ex.toString() }
