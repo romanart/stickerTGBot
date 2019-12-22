@@ -271,5 +271,32 @@ class NegotiateAction() : ActionCommand("!договориться", "Попро
 
         return null
     }
+}
 
+class NotifyAction(private val ownerId: Long) : ActionCommand("!notify", "Notify currently playing groups with provided message") {
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (message.chatId != ownerId) return null
+
+        val notifyMessage = message.text.replace("!notify ", "")
+
+        if (notifyMessage.isBlank()) return null
+
+        val query = "SELECT chat_id FROM $HOGWARTS_STATS_TABLE;"
+
+        val chats = botAPI.executeQuery(query) { r ->
+            mutableListOf<Long>().apply {
+                while (r.next()) {
+                    add(r.getLong(1))
+                }
+            }
+        }
+
+        val msg = "Внамание, важное сообщение: $notifyMessage"
+
+        for (chat_id in chats) {
+            botAPI.execute(SendMessage(chat_id, msg))
+        }
+
+        return null
+    }
 }

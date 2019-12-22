@@ -41,7 +41,7 @@ class StickerBot(
 
     val botLogger get() = logger
 
-    private val textBasedCommand = listOf(
+    val textCommands = listOf(
         LogCommand(ownerID),
         DeleteCommand(),
         ConverterCommand(imageProvider),
@@ -59,19 +59,16 @@ class StickerBot(
         StopCommand(ownerID)
     )
 
-    private val actions = listOf(
+    val actions = listOf(
         StartHogwartsAction(),
         PutHatAction(),
         CatchASnithAction(),
         CatchAPrihodAction(),
         HogwartsScoreAction(),
         HogwartsPersonalScoreAction(),
-        NegotiateAction()
+        NegotiateAction(),
+        NotifyAction(ownerID)
     )
-
-    val textCommands get() = textBasedCommand
-
-    val textActions get() = actions
 
     private val userSpecialCommand = listOf(
         SelectSpecialCommand(),
@@ -92,7 +89,7 @@ class StickerBot(
             try {
                 when {
                     messageText.startsWith("/") -> {
-                        val command = textBasedCommand.firstOrNull { messageText.startsWith("${it.name} ") || messageText == it.name }
+                        val command = textCommands.firstOrNull { messageText.startsWith("${it.name} ") || messageText == it.name }
                         if (command != null) {
                             command.execute(message, this)?.let { response ->
                                 execute(SendMessage(message.chatId, response).also {
