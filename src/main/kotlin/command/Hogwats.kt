@@ -15,6 +15,7 @@ enum class HogwartsHouse(val printName: String, val scoreColumn: String) {
 
 private const val HOGWARTS_GAME_ROLE_TABLE = "hogwartsGameRole"
 private const val HOGWARTS_STATS_TABLE = "hogwartsStats"
+private const val HOGWARTS_NICK_NAMES_TABLE = "hogwartsPlayerNickname"
 
 private fun checkGameIsStarted(chat_id: Long, botAPI: StickerBot): Boolean {
     val query = "SELECT chat_id FROM $HOGWARTS_STATS_TABLE WHERE chat_id = $chat_id;"
@@ -233,15 +234,86 @@ class HogwartsScoreAction : ActionCommand("!счет", "Счет по факул
 
             } else "Сначала начните игру командой !играть"
         }
+    }
+}
 
+class HogwartsPlayerList : ActionCommand("!список", "Список игроков") {
+    private fun selectNickNames(chat_id: Long, botAPI: StickerBot): List<List<String>> {
+        val queryUserIds =
+            "SELECT (user_id, team_id) FROM $HOGWARTS_GAME_ROLE_TABLE WHERE chat_id = $chat_id;"
+
+        val teamMap = mutableMapOf<Int, Int>()
+
+        botAPI.executeQuery(queryUserIds) { r ->
+            while (r.next()) {
+                val user = r.getInt(1)
+                val team = r.getInt(2)
+                teamMap[user] = team
+            }
+        }
+
+        if (teamMap.isEmpty()) return emptyList()
+
+        val queryBuilder = StringBuilder("SELECT (user_id, name) FROM $HOGWARTS_NICK_NAMES_TABLE WHERE ")
+
+        val predicateBuilder = teamMap.keys.joinTo(queryBuilder, " OR ") { "user_id = $it" }
+
+        predicateBuilder.append(';')
+
+        val teamNickNames = listOf(mutableListOf<String>(), mutableListOf<String>(), mutableListOf<String>(), mutableListOf<String>())
+
+        botAPI.executeQuery(predicateBuilder.toString()) { r ->
+            while (r.next()) {
+                val user = r.getInt(1)
+                val nickName = r.getString(2)
+                val team = teamMap[user] ?: error("No team for user $nickName found")
+                teamNickNames[team].add(nickName)
+            }
+        }
+
+        return teamNickNames
+    }
+
+    private fun StringBuilder.printHousePlayers(house: HogwartsHouse, nicknames: List<List<String>>) {
+        append('\t')
+        append(house.printName)
+        append(" - ")
+        nicknames[house.ordinal].joinTo(this, ", ")
+        appendln()
+    }
+
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (message.chat.isUserChat) return null
+
+        if (!checkGameIsStarted(message.chatId, botAPI)) return "Сначала начните игру командой !играть"
+
+        val nicknames = selectNickNames(message.chatId, botAPI)
+
+        val sb = StringBuilder("Список игроков\n")
+
+        HogwartsHouse.values().forEach { sb.printHousePlayers(it, nicknames) }
+
+        return sb.toString()
     }
 }
 
 class HogwartsPersonalScoreAction : ActionCommand("!мой", "Персональный счет по снитчам и приходам") {
 
+    private fun updateNickName(user_id: Int, nickname: String, botAPI: StickerBot) {
+        val newName = nickname.sanitaze()
+        val query =
+            "INSERT INTO $HOGWARTS_NICK_NAMES_TABLE (user_id, name) " +
+            "VALUES ($user_id, '$newName') ON DUPLICATE KEY " +
+            "UPDATE name = '$newName';"
+
+        botAPI.executeUpdate(query)
+    }
+
     override fun execute(message: Message, botAPI: StickerBot): String? {
 
         if (message.chat.isUserChat) return null
+
+        updateNickName(message.from.id, message.userName(), botAPI)
 
         val query =
             "SELECT team_id, snitch_score, prihod_score " +
@@ -263,7 +335,7 @@ class HogwartsPersonalScoreAction : ActionCommand("!мой", "Персональ
     }
 }
 
-class NegotiateAction() : ActionCommand("!договориться", "Попробуем договориться с деканатом") {
+class NegotiateAction : ActionCommand("!договориться", "Попробуем договориться с деканатом") {
     override fun execute(message: Message, botAPI: StickerBot): String? {
         if (message.chat.isUserChat) {
             return "Пока что не о чем договариваться, деканат не вышел из отпуска"

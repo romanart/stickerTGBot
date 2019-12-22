@@ -80,3 +80,18 @@ CREATE TABLE IF NOT EXISTS hogwartsStats (
 
   PRIMARY KEY (chat_id)
 );
+
+CREATE TABLE IF NOT EXISTS hogwartsPlayerNickname (
+  user_id BIGINT NOT NULL UNIQUE,
+  name VARCHAR(64) NOT NULL,
+
+  PRIMARY KEY (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS hogwartsCheat (
+  user_id BIGINT NOT NULL UNIQUE,
+  magic_value_1 BIGINT,
+  time_stamp BIGINT NOT NULL,
+
+  PRIMARY KEY (user_id)
+);
