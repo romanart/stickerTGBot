@@ -31,6 +31,16 @@ private fun getUserHouse(chat_id: Long, user_id: Int, botAPI: StickerBot): Hogwa
     }
 }
 
+private fun updateNickName(user_id: Int, nickname: String, botAPI: StickerBot) {
+    val newName = nickname.sanitaze()
+    val query =
+        "INSERT INTO $HOGWARTS_NICK_NAMES_TABLE (user_id, name) " +
+        "VALUES ($user_id, '$newName') ON DUPLICATE KEY " +
+        "UPDATE name = '$newName';"
+
+    botAPI.executeUpdate(query)
+}
+
 class StartHogwartsAction : ActionCommand("!играть", "Начинает игру в Хогвартс, надевайте шляпы и ловите снитчи") {
 
     private fun startGame(message: Message, botAPI: StickerBot) {
@@ -135,7 +145,11 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
         val house = getUserHouse(message.chatId, message.from.id, botAPI) ?: return "Сначала наденьте шляпу, чтобы стать волшебником!"
 
-        if (!checkCooldown(message, botAPI)) return "${message.userName()}, можете попробовать поймать $subject не чаще одного раза в $cooldown минут"
+        val userName = message.userName()
+
+        updateNickName(message.from.id, userName, botAPI)
+
+        if (!checkCooldown(message, botAPI)) return "$userName, можете попробовать поймать $subject не чаще одного раза в $cooldown минут"
 
         updateCooldown(message, botAPI)
 
@@ -143,7 +157,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
         val queryChat =
             "UPDATE $HOGWARTS_STATS_TABLE " +
-             "SET last_success = '${message.userName().sanitaze()}', ${house.scoreColumn} = ${house.scoreColumn} + $winPonts "
+             "SET last_success = '${userName.sanitaze()}', ${house.scoreColumn} = ${house.scoreColumn} + $winPonts "
              "WHERE chat_id = ${message.chatId};"
 
         botAPI.executeUpdate(queryChat)
@@ -278,8 +292,7 @@ class HogwartsPlayerList : ActionCommand("!список", "Список игро
         append('\t')
         append(house.printName)
         append(" - ")
-        nicknames[house.ordinal].joinTo(this, ", ")
-        appendln()
+        nicknames[house.ordinal].joinTo(this, ", ", postfix = "\n")
     }
 
     override fun execute(message: Message, botAPI: StickerBot): String? {
@@ -298,16 +311,6 @@ class HogwartsPlayerList : ActionCommand("!список", "Список игро
 }
 
 class HogwartsPersonalScoreAction : ActionCommand("!мой", "Персональный счет по снитчам и приходам") {
-
-    private fun updateNickName(user_id: Int, nickname: String, botAPI: StickerBot) {
-        val newName = nickname.sanitaze()
-        val query =
-            "INSERT INTO $HOGWARTS_NICK_NAMES_TABLE (user_id, name) " +
-            "VALUES ($user_id, '$newName') ON DUPLICATE KEY " +
-            "UPDATE name = '$newName';"
-
-        botAPI.executeUpdate(query)
-    }
 
     override fun execute(message: Message, botAPI: StickerBot): String? {
 
