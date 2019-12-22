@@ -16,6 +16,8 @@ enum class HogwartsHouse(val printName: String, val scoreColumn: String) {
 private const val HOGWARTS_GAME_ROLE_TABLE = "hogwartsGameRole"
 private const val HOGWARTS_STATS_TABLE = "hogwartsStats"
 private const val HOGWARTS_NICK_NAMES_TABLE = "hogwartsPlayerNickname"
+private const val HOGWARTS_PUZZLE_TABLE = "hogwartsDayPuzzle"
+private const val HOGWARTS_CHEAT_TABLE = "hogwartsCheat"
 
 private fun checkGameIsStarted(chat_id: Long, botAPI: StickerBot): Boolean {
     val query = "SELECT chat_id FROM $HOGWARTS_STATS_TABLE WHERE chat_id = $chat_id;"
@@ -103,7 +105,7 @@ class PutHatAction : ActionCommand("!надеть", "Надеть на перв�
             return null
         }
 
-        botAPI.execute(SendMessage(message.chatId, "Дайка мне подумать ...").also {
+        botAPI.execute(SendMessage(message.chatId, "Дай-ка мне подумать ...").also {
             it.replyToMessageId = message.messageId
         })
 
@@ -280,7 +282,7 @@ class HogwartsPlayerList : ActionCommand("!список", "Список игро
             while (r.next()) {
                 val user = r.getInt(1)
                 val nickName = r.getString(2)
-                val team = teamMap[user] ?: error("No team for user $nickName found")
+                val team = teamMap[user] ?: error("No team for user '$nickName' found")
                 teamNickNames[team].add(nickName)
             }
         }
@@ -340,13 +342,67 @@ class HogwartsPersonalScoreAction : ActionCommand("!мой", "Персональ
 
 class NegotiateAction : ActionCommand("!договориться", "Попробуем договориться с деканатом") {
     override fun execute(message: Message, botAPI: StickerBot): String? {
-        if (message.chat.isUserChat) {
-            return "Пока что не о чем договариваться, деканат не вышел из отпуска"
-        }
+        if (!message.chat.isUserChat) return null
 
-        return null
+        val question = botAPI.executeQuery("SELECT (question) FROM $HOGWARTS_PUZZLE_TABLE;") { r ->
+            if (r.next()) r.getString(1) else null
+        } ?: return "Пока что не о чем договариваться, деканат не вышел из отпуска"
+
+
+        return "Отправь мне !ответ на вопрос: $question"
     }
 }
+
+class AnswerAction : ActionCommand("!ответ", "Попробуем договориться с деканатом") {
+
+    companion object {
+        private const val CHEAT_VALUE = 100
+        private const val CHEAT_DURATION = 2 * 60 * 60 * 1000
+    }
+
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (!message.chat.isUserChat) return null
+
+        val checkQuery = "SELECT (magic_value) FROM $HOGWARTS_CHEAT_TABLE WHERE user_id = ${message.from.id};"
+
+        val existedCheat = botAPI.executeQuery(checkQuery) { r ->
+            if (r.next()) r.getInt(1) else 0
+        }
+
+        if (existedCheat != 0) return "Ты уже сегодня читерил, так часто нельзя"
+
+        val answer = botAPI.executeQuery("SELECT (answer) FROM $HOGWARTS_PUZZLE_TABLE;") { r ->
+            if (r.next()) r.getString(1) else null
+        } ?: return "Пока что не о чем договариваться, деканат не вышел из отпуска"
+
+        val userAnswer = message.text.replace("!ответ ", "")
+
+        if (userAnswer != answer) return "Ответ неверный, попробуй еще раз, если забыл вопрос - спроси с помощью !договориться"
+
+        val endTimeStamp = System.currentTimeMillis() + CHEAT_DURATION
+
+        val query = "INSERT INTO $HOGWARTS_CHEAT_TABLE (user_id, magic_value, time_stamp) VALUES (${message.from.id}, $CHEAT_VALUE, $endTimeStamp);"
+
+        botAPI.executeUpdate(query)
+
+        return "Поздравляю ${message.userName()}, ты выйграл читерство на некоторое время, пототропись фармить снитчи!"
+    }
+}
+
+abstract class SetPuzzleValue(private val ownerId: Long, actionName: String, private val valueName: String) : ActionCommand("!$actionName", "Set current puzzle $valueName") {
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (message.chatId != ownerId) return null
+
+        val value = message.text.replace("$name ", "").sanitaze().trim()
+
+        botAPI.executeUpdate("INSERT INTO $HOGWARTS_PUZZLE_TABLE ($valueName) VALUES ('$value');")
+
+        return "$valueName is set to '$value'"
+    }
+}
+
+class SetPuzzleQuestion(ownerId: Long) : SetPuzzleValue(ownerId, "setQuestion", "question")
+class SetPuzzleAnswer(ownerId: Long) : SetPuzzleValue(ownerId, "setAnswer", "answer")
 
 class NotifyAction(private val ownerId: Long) : ActionCommand("!notify", "Notify currently playing groups with provided message") {
     override fun execute(message: Message, botAPI: StickerBot): String? {

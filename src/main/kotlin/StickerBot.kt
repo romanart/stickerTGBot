@@ -67,7 +67,11 @@ class StickerBot(
         HogwartsScoreAction(),
         HogwartsPersonalScoreAction(),
         NegotiateAction(),
-        NotifyAction(ownerID)
+        NotifyAction(ownerID),
+        HogwartsPlayerList(),
+        AnswerAction(),
+        SetPuzzleAnswer(ownerID),
+        SetPuzzleQuestion(ownerID)
     )
 
     private val userSpecialCommand = listOf(
