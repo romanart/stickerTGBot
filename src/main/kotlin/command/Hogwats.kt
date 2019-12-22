@@ -141,7 +141,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
         return action == fullActionName
     }
 
-    private val Int.timeFraction get() = (2 * this / 3) * 60 * 1000
+    private val Int.timeFraction get() = (this / 4) * 60 * 1000
     private val Int.chanceFraction get() = this / 3
 
     private fun selectCheat(user_id: Int, botAPI: StickerBot): Int {
