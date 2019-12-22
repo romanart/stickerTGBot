@@ -90,13 +90,8 @@ CREATE TABLE IF NOT EXISTS hogwartsPlayerNickname (
 
 CREATE TABLE IF NOT EXISTS hogwartsCheat (
   user_id BIGINT NOT NULL UNIQUE,
-  magic_value BIGINT,
+  magic_value BIGINT NOT NULL,
   time_stamp BIGINT NOT NULL,
 
   PRIMARY KEY (user_id)
-);
-
-CREATE TABLE IF NOT EXISTS hogwartsDayPuzzle (
-  question VARCHAR(256) NOT NULL,
-  answer VARCHAR(256) NOT NULL
 );

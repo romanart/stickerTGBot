@@ -16,8 +16,10 @@ enum class HogwartsHouse(val printName: String, val scoreColumn: String) {
 private const val HOGWARTS_GAME_ROLE_TABLE = "hogwartsGameRole"
 private const val HOGWARTS_STATS_TABLE = "hogwartsStats"
 private const val HOGWARTS_NICK_NAMES_TABLE = "hogwartsPlayerNickname"
-private const val HOGWARTS_PUZZLE_TABLE = "hogwartsDayPuzzle"
 private const val HOGWARTS_CHEAT_TABLE = "hogwartsCheat"
+
+private var dailyPuzzleQuestion = "Кто сегодня лох?"
+private var dailyPuzzleAnswer = "ты"
 
 private fun checkGameIsStarted(chat_id: Long, botAPI: StickerBot): Boolean {
     val query = "SELECT chat_id FROM $HOGWARTS_STATS_TABLE WHERE chat_id = $chat_id;"
@@ -139,6 +141,21 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
         return action == fullActionName
     }
 
+    private val Int.timeFraction get() = (2 * this / 3) * 60 * 1000
+    private val Int.chanceFraction get() = this / 3
+
+    private fun selectCheat(user_id: Int, botAPI: StickerBot): Int {
+        val timeStamp = System.currentTimeMillis()
+
+        return botAPI.executeQuery("SELECT magic_value, time_stamp FROM $HOGWARTS_CHEAT_TABLE WHERE user_id = $user_id;") { r ->
+            if (r.next()) {
+                val value = r.getInt(1)
+                val endTime = r.getLong(2)
+                if (timeStamp < endTime) value else 0
+            } else 0
+        }
+    }
+
     override fun execute(message: Message, botAPI: StickerBot): String? {
 
         if (message.isUserMessage) return null // Game is only for chat
@@ -151,11 +168,13 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
         updateNickName(message.from.id, userName, botAPI)
 
-        if (!checkCooldown(message, botAPI)) return "$userName, можете попробовать поймать $subject не чаще одного раза в $cooldown минут"
+        val cheatValue = selectCheat(message.from.id, botAPI)
+
+        if (!checkCooldown(message, botAPI, cheatValue)) return "$userName, можете попробовать поймать $subject не чаще одного раза в $cooldown минут"
 
         updateCooldown(message, botAPI)
 
-        if (random.nextInt(100) <= 90) return loseMessage
+        if ((random.nextInt(100) + cheatValue.chanceFraction) <= 90) return loseMessage
 
         val queryChat =
             "UPDATE $HOGWARTS_STATS_TABLE " +
@@ -174,7 +193,11 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
         return winMessage(message, house, botAPI)
     }
 
-    private fun checkCooldown(message: Message, botAPI: StickerBot): Boolean {
+    private fun checkCooldown(
+        message: Message,
+        botAPI: StickerBot,
+        cheatValue: Int
+    ): Boolean {
         val currentTime = System.currentTimeMillis()
 
         val query = "SELECT $timeStampColumn FROM $HOGWARTS_GAME_ROLE_TABLE WHERE chat_id = ${message.chatId} AND user_id = ${message.from.id};"
@@ -183,7 +206,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
             if (r.next()) r.getLong(1) else error("expecting last time stamp")
         }
 
-        return (currentTime - lastTimeStamp >= millisecondComedown)
+        return (currentTime - lastTimeStamp >= (millisecondComedown - cheatValue.timeFraction))
     }
 
     private fun updateCooldown(message: Message, botAPI: StickerBot) {
@@ -256,7 +279,7 @@ class HogwartsScoreAction : ActionCommand("!счет", "Счет по факул
 class HogwartsPlayerList : ActionCommand("!список", "Список игроков") {
     private fun selectNickNames(chat_id: Long, botAPI: StickerBot): List<List<String>> {
         val queryUserIds =
-            "SELECT (user_id, team_id) FROM $HOGWARTS_GAME_ROLE_TABLE WHERE chat_id = $chat_id;"
+            "SELECT user_id, team_id FROM $HOGWARTS_GAME_ROLE_TABLE WHERE chat_id = $chat_id;"
 
         val teamMap = mutableMapOf<Int, Int>()
 
@@ -270,7 +293,7 @@ class HogwartsPlayerList : ActionCommand("!список", "Список игро
 
         if (teamMap.isEmpty()) return emptyList()
 
-        val queryBuilder = StringBuilder("SELECT (user_id, name) FROM $HOGWARTS_NICK_NAMES_TABLE WHERE ")
+        val queryBuilder = StringBuilder("SELECT user_id, name FROM $HOGWARTS_NICK_NAMES_TABLE WHERE ")
 
         val predicateBuilder = teamMap.keys.joinTo(queryBuilder, " OR ") { "user_id = $it" }
 
@@ -344,12 +367,7 @@ class NegotiateAction : ActionCommand("!договориться", "Попроб
     override fun execute(message: Message, botAPI: StickerBot): String? {
         if (!message.chat.isUserChat) return null
 
-        val question = botAPI.executeQuery("SELECT (question) FROM $HOGWARTS_PUZZLE_TABLE;") { r ->
-            if (r.next()) r.getString(1) else null
-        } ?: return "Пока что не о чем договариваться, деканат не вышел из отпуска"
-
-
-        return "Отправь мне !ответ на вопрос: $question"
+        return "Отправь мне !ответ на вопрос: $dailyPuzzleQuestion"
     }
 }
 
@@ -363,7 +381,7 @@ class AnswerAction : ActionCommand("!ответ", "Попробуем догов
     override fun execute(message: Message, botAPI: StickerBot): String? {
         if (!message.chat.isUserChat) return null
 
-        val checkQuery = "SELECT (magic_value) FROM $HOGWARTS_CHEAT_TABLE WHERE user_id = ${message.from.id};"
+        val checkQuery = "SELECT magic_value FROM $HOGWARTS_CHEAT_TABLE WHERE user_id = ${message.from.id};"
 
         val existedCheat = botAPI.executeQuery(checkQuery) { r ->
             if (r.next()) r.getInt(1) else 0
@@ -371,11 +389,9 @@ class AnswerAction : ActionCommand("!ответ", "Попробуем догов
 
         if (existedCheat != 0) return "Ты уже сегодня читерил, так часто нельзя"
 
-        val answer = botAPI.executeQuery("SELECT (answer) FROM $HOGWARTS_PUZZLE_TABLE;") { r ->
-            if (r.next()) r.getString(1) else null
-        } ?: return "Пока что не о чем договариваться, деканат не вышел из отпуска"
+        val answer = dailyPuzzleAnswer
 
-        val userAnswer = message.text.replace("!ответ ", "")
+        val userAnswer = message.text.replace("!ответ ", "").trim()
 
         if (userAnswer != answer) return "Ответ неверный, попробуй еще раз, если забыл вопрос - спроси с помощью !договориться"
 
@@ -390,19 +406,32 @@ class AnswerAction : ActionCommand("!ответ", "Попробуем догов
 }
 
 abstract class SetPuzzleValue(private val ownerId: Long, actionName: String, private val valueName: String) : ActionCommand("!$actionName", "Set current puzzle $valueName") {
+
+    abstract fun updateValue(value: String): String
+
     override fun execute(message: Message, botAPI: StickerBot): String? {
         if (message.chatId != ownerId) return null
 
-        val value = message.text.replace("$name ", "").sanitaze().trim()
+        val value = message.text.replace("$name ", "").trim()
 
-        botAPI.executeUpdate("INSERT INTO $HOGWARTS_PUZZLE_TABLE ($valueName) VALUES ('$value');")
+        val newValue = updateValue(value)
 
-        return "$valueName is set to '$value'"
+        return "$valueName is set to '$newValue'"
     }
 }
 
-class SetPuzzleQuestion(ownerId: Long) : SetPuzzleValue(ownerId, "setQuestion", "question")
-class SetPuzzleAnswer(ownerId: Long) : SetPuzzleValue(ownerId, "setAnswer", "answer")
+class SetPuzzleQuestion(ownerId: Long) : SetPuzzleValue(ownerId, "setQuestion", "question") {
+    override fun updateValue(value: String): String {
+        dailyPuzzleQuestion = value
+        return value
+    }
+}
+class SetPuzzleAnswer(ownerId: Long) : SetPuzzleValue(ownerId, "setAnswer", "answer") {
+    override fun updateValue(value: String): String {
+        dailyPuzzleAnswer = value
+        return value
+    }
+}
 
 class NotifyAction(private val ownerId: Long) : ActionCommand("!notify", "Notify currently playing groups with provided message") {
     override fun execute(message: Message, botAPI: StickerBot): String? {

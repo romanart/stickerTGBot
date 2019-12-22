@@ -7,6 +7,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Update
 import java.io.File
 import java.sql.ResultSet
+import java.util.*
 
 class StickerBot(
     private val config: Config,
@@ -26,12 +27,31 @@ class StickerBot(
         const val CHAT_USER_CAPTION_TABLE = "chatUserCaption"
         const val STICKER_PACK_OWNER_TABLE = "stickerPackOwner"
         const val GROUP_STICKER_PACK_TABLE = "groupStickerPack"
+        const val HOGWARTS_CHEAT_TABLE = "hogwartsCheat"
     }
 
     override fun onClosing() {
         dbConnection.releaseConnection()
         workingDirectory.deleteRecursively()
         super.onClosing()
+    }
+
+    private fun setCheatUpdateEvent() {
+        val tomorrow = Calendar.getInstance()
+        tomorrow.set(Calendar.HOUR, 0)
+        tomorrow.set(Calendar.MINUTE, 0)
+        tomorrow.set(Calendar.SECOND, 0)
+        tomorrow.add(Calendar.DATE, 1)
+
+        Timer(true).schedule(object : TimerTask() {
+            override fun run() {
+                dbConnection.executeUpdate("TRUNCATE TABLE $HOGWARTS_CHEAT_TABLE;")
+            }
+        }, tomorrow.time, 24 * 60 * 60 * 1000)
+    }
+
+    init {
+        setCheatUpdateEvent()
     }
 
     override fun getBotUsername() = config.botName
