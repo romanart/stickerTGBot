@@ -1,7 +1,7 @@
 package command
 
 import ImageProvider
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.stickers.CreateNewStickerSet
 import org.telegram.telegrambots.meta.api.objects.File

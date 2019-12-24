@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.objects.Message
 import kotlin.system.exitProcess
 

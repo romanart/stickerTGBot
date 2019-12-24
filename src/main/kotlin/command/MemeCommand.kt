@@ -1,7 +1,7 @@
 package command
 
 import MemeProvider
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.objects.File

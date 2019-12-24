@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import java.security.SecureRandom

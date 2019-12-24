@@ -1,11 +1,6 @@
-import database.*
-import org.apache.http.HttpHost
-import org.apache.http.auth.AuthScope
-import org.apache.http.auth.UsernamePasswordCredentials
-import org.apache.http.client.CredentialsProvider
-import org.apache.http.client.config.RequestConfig
-import org.apache.http.impl.client.BasicCredentialsProvider
-import org.glassfish.jersey.client.ClientProperties.PROXY_PASSWORD
+import bot.StickerBot
+import database.DatabaseAccessManager
+import database.DatabasePingTask
 import org.telegram.telegrambots.ApiContextInitializer
 import org.telegram.telegrambots.bots.DefaultBotOptions
 import org.telegram.telegrambots.meta.ApiContext
@@ -16,8 +11,6 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.Authenticator
-import java.net.PasswordAuthentication
 import java.util.*
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO

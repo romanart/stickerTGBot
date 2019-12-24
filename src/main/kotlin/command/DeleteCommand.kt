@@ -1,7 +1,7 @@
 package command
 
 import org.telegram.telegrambots.meta.api.objects.Message
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.methods.stickers.DeleteStickerFromSet
 import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 

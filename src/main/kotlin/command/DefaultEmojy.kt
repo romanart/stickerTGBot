@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.objects.Message
 
 class DefaultEmojy : TextCommand("/emoji", "Set default emoji for chat") {

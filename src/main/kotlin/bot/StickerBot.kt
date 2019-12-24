@@ -1,3 +1,8 @@
+package bot
+
+import Config
+import ImageProvider
+import MemeProvider
 import command.*
 import database.DatabaseConnection
 import mu.KLogging
@@ -5,9 +10,13 @@ import org.telegram.telegrambots.bots.DefaultBotOptions
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import java.io.File
 import java.sql.ResultSet
 import java.util.*
+import java.util.concurrent.PriorityBlockingQueue
+import kotlin.time.ExperimentalTime
+import kotlin.time.milliseconds
 
 class StickerBot(
     private val config: Config,
@@ -43,11 +52,23 @@ class StickerBot(
         tomorrow.set(Calendar.SECOND, 0)
         tomorrow.add(Calendar.DATE, 1)
 
-        Timer(true).schedule(object : TimerTask() {
+        Timer("cheat truncate daemon", true).schedule(object : TimerTask() {
             override fun run() {
                 dbConnection.executeUpdate("TRUNCATE TABLE $HOGWARTS_CHEAT_TABLE;")
             }
         }, tomorrow.time, 24 * 60 * 60 * 1000)
+    }
+
+    private val pendingTaskQueue  = startCleanupDaemon()
+
+    private fun startCleanupDaemon(): AbstractQueue<BotTask> {
+        val queue = PriorityBlockingQueue<BotTask>(32)
+        val worker = PendingTaskDaemon(queue, this)
+        val workerThread = Thread(worker, "Pending worker thread").apply {
+            isDaemon = true
+        }
+        workerThread.start()
+        return queue
     }
 
     init {
@@ -91,7 +112,8 @@ class StickerBot(
         HogwartsPlayerList(),
         AnswerAction(),
         SetPuzzleAnswer(ownerID),
-        SetPuzzleQuestion(ownerID)
+        SetPuzzleQuestion(ownerID),
+        CheatersListAction(ownerID)
     )
 
     private val userSpecialCommand = listOf(
@@ -125,10 +147,22 @@ class StickerBot(
                     messageText.startsWith("!") -> {
                         val action = actions.firstOrNull { it.checkAction(messageText) }
                         if (action != null) {
-                            action.execute(message, this)?.let { response ->
-                                execute(SendMessage(message.chatId, response).also {
-                                    it.replyToMessageId = message.messageId
-                                })
+                            val response = action.execute(message, this)?.let { response ->
+                                try {
+                                    execute(SendMessage(message.chatId, response).also {
+                                        it.replyToMessageId = message.messageId
+                                    })
+                                } catch (te: TelegramApiRequestException) {
+                                    // If replying message was deleted try to send with out it
+                                    execute(SendMessage(message.chatId, response))
+                                }
+                            }
+                            if (action.cleanUp) {
+                                val cleanupTime = System.currentTimeMillis() + 1.minutesToMillis
+                                if (response != null) {
+                                    pendingTaskQueue.add(MessageCleanUpTask(message.chatId, response.messageId, cleanupTime))
+                                }
+                                pendingTaskQueue.add(MessageCleanUpTask(message.chatId, message.messageId, cleanupTime))
                             }
                         }
                     }

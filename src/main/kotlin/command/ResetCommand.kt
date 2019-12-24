@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.objects.Message
 
 class ResetCommand : TextCommand("/reset", "Rest user state") {

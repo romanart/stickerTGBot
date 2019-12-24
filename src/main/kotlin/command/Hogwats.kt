@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import java.security.SecureRandom
@@ -119,7 +119,7 @@ class PutHatAction : ActionCommand("!надеть", "Надеть на перв�
     }
 }
 
-abstract class CatchAction(private val subject: String, private val cooldown: Long) : ActionCommand("!поймать", "Пытаемся поймать $subject") {
+abstract class CatchAction(private val subject: String, private val cooldown: Long) : ActionCommand("!поймать", "Пытаемся поймать $subject", true) {
 
     protected abstract val scoreColumn: String
     protected abstract val timeStampColumn: String
@@ -207,7 +207,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
     private fun updateCooldown(message: Message, botAPI: StickerBot) {
         val seed = cooldown.toInt() / 4
-        val deltaMin = random.nextInt(2 * seed) - seed
+        val deltaMin = random.nextInt(2 * seed) - seed / 2
         val cooldown = System.currentTimeMillis() + deltaMin * 60 * 1000
 
         val queryUser =
@@ -401,6 +401,8 @@ class AnswerAction : ActionCommand("!ответ", "Попробуем догов
 
         botAPI.executeUpdate(query)
 
+        botAPI.botLogger.info { "${message.userName()} has won cheats for 2 hours" }
+
         return "Поздравляю ${message.userName()}, ты выйграл читерство на некоторое время, пототропись фармить снитчи!"
     }
 }
@@ -458,5 +460,40 @@ class NotifyAction(private val ownerId: Long) : ActionCommand("!notify", "Notify
         }
 
         return null
+    }
+}
+
+class CheatersListAction(private val ownerId: Long) : ActionCommand("!cheaters", "Lists the currently active cheaters") {
+
+    override fun execute(message: Message, botAPI: StickerBot): String? {
+        if (message.chatId != ownerId) return null
+
+        val current  = System.currentTimeMillis()
+        val userQuery = "SELECT user_id FROM $HOGWARTS_CHEAT_TABLE WHERE $current < time_stamp;"
+        val cheatingUsers = botAPI.executeQuery(userQuery) { r ->
+            mutableListOf<Long>().apply {
+                while (r.next()) {
+                    add(r.getLong(1))
+                }
+            }
+        }
+
+        if (cheatingUsers.isEmpty()) return "No one cheats right now"
+
+        val queryBuilder = StringBuilder("SELECT name FROM $HOGWARTS_NICK_NAMES_TABLE WHERE ")
+
+        val predicateBuilder = cheatingUsers.joinTo(queryBuilder, " OR ") { "user_id = $it" }
+
+        predicateBuilder.append(';')
+
+        val nicknames = botAPI.executeQuery(predicateBuilder.toString()) { r ->
+            mutableListOf<String>().apply {
+                while (r.next()) {
+                    add(r.getString(1))
+                }
+            }
+        }
+
+        return nicknames.joinToString(", ")
     }
 }

@@ -1,6 +1,6 @@
 package command
 
-import StickerBot
+import bot.StickerBot
 import org.apache.commons.io.input.ReversedLinesFileReader
 import org.apache.log4j.FileAppender
 import org.apache.log4j.Logger
