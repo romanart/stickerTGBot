@@ -170,7 +170,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
 
         val cheatValue = selectCheat(message.from.id, botAPI)
 
-        if (!checkCooldown(message, botAPI, cheatValue)) return "$userName, можете попробовать поймать $subject не чаще одного раза в $cooldown минут"
+        if (!checkCooldown(message, botAPI, cheatValue)) return "$userName, можете попробовать поймать $subject не чаще одного раза в примерно $cooldown минут"
 
         updateCooldown(message, botAPI)
 
@@ -193,11 +193,7 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
         return winMessage(message, house, botAPI)
     }
 
-    private fun checkCooldown(
-        message: Message,
-        botAPI: StickerBot,
-        cheatValue: Int
-    ): Boolean {
+    private fun checkCooldown(message: Message, botAPI: StickerBot, cheatValue: Int): Boolean {
         val currentTime = System.currentTimeMillis()
 
         val query = "SELECT $timeStampColumn FROM $HOGWARTS_GAME_ROLE_TABLE WHERE chat_id = ${message.chatId} AND user_id = ${message.from.id};"
@@ -206,13 +202,17 @@ abstract class CatchAction(private val subject: String, private val cooldown: Lo
             if (r.next()) r.getLong(1) else error("expecting last time stamp")
         }
 
-        return (currentTime - lastTimeStamp >= (millisecondComedown - cheatValue.timeFraction))
+        return ((currentTime - lastTimeStamp) >= (millisecondComedown - cheatValue.timeFraction))
     }
 
     private fun updateCooldown(message: Message, botAPI: StickerBot) {
+        val seed = cooldown.toInt() / 4
+        val deltaMin = random.nextInt(2 * seed) - seed
+        val cooldown = System.currentTimeMillis() + deltaMin * 60 * 1000
+
         val queryUser =
             "UPDATE $HOGWARTS_GAME_ROLE_TABLE " +
-            "SET $timeStampColumn = ${System.currentTimeMillis()} " +
+            "SET $timeStampColumn = $cooldown " +
             "WHERE chat_id = ${message.chatId} AND user_id = ${message.from.id};"
 
         botAPI.executeUpdate(queryUser)
