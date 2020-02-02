@@ -15,8 +15,6 @@ import java.io.File
 import java.sql.ResultSet
 import java.util.*
 import java.util.concurrent.PriorityBlockingQueue
-import kotlin.time.ExperimentalTime
-import kotlin.time.milliseconds
 
 class StickerBot(
     private val config: Config,
@@ -45,18 +43,25 @@ class StickerBot(
         super.onClosing()
     }
 
-    private fun setCheatUpdateEvent() {
-        val tomorrow = Calendar.getInstance()
-        tomorrow.set(Calendar.HOUR, 0)
-        tomorrow.set(Calendar.MINUTE, 0)
-        tomorrow.set(Calendar.SECOND, 0)
-        tomorrow.add(Calendar.DATE, 1)
+    private inner class DropCheatTableTask(time: Long) : DropTableTask(HOGWARTS_CHEAT_TABLE, dbConnection, time) {
+        override fun postProcess() {
+            schedCheatUpdateEvent()
+        }
+    }
 
-        Timer("cheat truncate daemon", true).schedule(object : TimerTask() {
-            override fun run() {
-                dbConnection.executeUpdate("TRUNCATE TABLE $HOGWARTS_CHEAT_TABLE;")
-            }
-        }, tomorrow.time, 24 * 60 * 60 * 1000)
+    private inner class PingTable(time: Long): BotTask(time) {
+        override fun execute(botApi: StickerBot) {
+            dbConnection.executeQuery("SELECT 1") { /* nothing to do */ }
+            schedDBPing()
+        }
+    }
+
+    private fun schedDBPing() {
+        pendingTaskQueue.add(PingTable(System.currentTimeMillis() + 5.hoursToMillis))
+    }
+
+    private fun schedCheatUpdateEvent() {
+        pendingTaskQueue.add(DropCheatTableTask(System.currentTimeMillis() + 24.hoursToMillis))
     }
 
     private val pendingTaskQueue  = startCleanupDaemon()
@@ -72,7 +77,8 @@ class StickerBot(
     }
 
     init {
-        setCheatUpdateEvent()
+        schedCheatUpdateEvent()
+        schedDBPing()
     }
 
     override fun getBotUsername() = config.botName
@@ -158,11 +164,10 @@ class StickerBot(
                                 }
                             }
                             if (action.cleanUp) {
-                                val cleanupTime = System.currentTimeMillis() + 1.minutesToMillis
+                                val cleanupTime = System.currentTimeMillis() + 37.secsToMillis
                                 if (response != null) {
                                     pendingTaskQueue.add(MessageCleanUpTask(message.chatId, response.messageId, cleanupTime))
                                 }
-                                pendingTaskQueue.add(MessageCleanUpTask(message.chatId, message.messageId, cleanupTime))
                             }
                         }
                     }

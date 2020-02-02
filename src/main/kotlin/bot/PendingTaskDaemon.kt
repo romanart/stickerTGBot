@@ -3,10 +3,9 @@ package bot
 import java.util.concurrent.BlockingQueue
 
 class PendingTaskDaemon(private val queue: BlockingQueue<BotTask>, private val botApi: StickerBot) : Runnable {
-
     private fun isValidToExecute(task: BotTask?): Boolean {
         val current = System.currentTimeMillis()
-        return task != null && task.time >= current
+        return task != null && current >= task.time
     }
 
     override fun run() {

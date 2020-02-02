@@ -453,7 +453,7 @@ class NotifyAction(private val ownerId: Long) : ActionCommand("!notify", "Notify
             }
         }
 
-        val msg = "Внамание, важное сообщение: $notifyMessage"
+        val msg = "Внимание, важное сообщение: $notifyMessage"
 
         for (chat_id in chats) {
             botAPI.execute(SendMessage(chat_id, msg))

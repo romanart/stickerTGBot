@@ -214,8 +214,6 @@ fun main(args: Array<String>) {
 
     println(dbConnection)
 
-    Timer("Database ping (every 5 hours)", true).scheduleAtFixedRate(DatabasePingTask(dbConnection), 1000, 5 * 60 * 60 * 1000)
-
     try {
         botAPI.registerBot(StickerBot(config, MockImageProvider(workingDirectory), MockMemeProvider(cli.fontFile), dbConnection, workingDirectory, botOptions))
     } catch (ex: TelegramApiException) {
